@@ -7,6 +7,7 @@ LDFLAGS += -rdynamic
 INC_DIR = inc
 SRC_DIR = src
 CMN_SRC_DIR = common
+WIFI_HAL_DIR = wifi
 
 ifndef CXX
 CXX=g++
@@ -17,11 +18,11 @@ CXXSTD=c++14
 endif
 
 ifndef CFLAGS
-CFLAGS = -MMD -O2 -Wall -g -I$(INC_DIR)
+CFLAGS = -MMD -O2 -Wall -g -I$(INC_DIR) -I$(SRC_DIR)/$(WIFI_HAL_DIR)
 CFLAGS += -std=${CXXSTD}
 endif
 
-OBJ=$(SRC_DIR)/$(CMN_SRC_DIR)/radio_hal_main.o
+OBJ=$(SRC_DIR)/$(CMN_SRC_DIR)/radio_hal_main.o $(SRC_DIR)/$(WIFI_HAL_DIR)/wifi_hal_main.o
 
 %.o: %.cpp
 	$(CXX) -c -fPIC $(CFLAGS) ${COPTS} $< -o $@

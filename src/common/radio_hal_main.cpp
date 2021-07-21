@@ -1,12 +1,16 @@
 #include <stdio.h>
 #include <getopt.h>
 #include "radio_hal.h"
+#include "wifi_hal.h"
 
-int radio_hal_attach(enum radio_type type)
+int radio_hal_attach(struct radio_context *ctx, enum radio_type type)
 {
+	int err = 0;
+
 	switch(type)
 	{
 		case RADIO_WIFI:
+			err = wifi_hal_attach(ctx);
 			break;
 		case RADIO_BT:
 			break;
@@ -14,14 +18,17 @@ int radio_hal_attach(enum radio_type type)
 			break;
 	}
 
-	return 0;
+	return err;
 }
 
-int radio_hal_dettach(enum radio_type type)
+int radio_hal_dettach(struct radio_context *ctx, enum radio_type type)
 {
+	int err = 0;
+
 	switch(type)
 	{
 		case RADIO_WIFI:
+			err = wifi_hal_dettach(ctx);
 			break;
 		case RADIO_BT:
 			break;
@@ -46,6 +53,7 @@ int main(int argc, char *argv[])
 	int status, c;
 	const char	*short_opt = "w::b::z::h::";
 	int long_opt_ptr;
+	struct radio_context *ctx;
 	struct option long_opt[] =
 	{
 		{"wifi", required_argument,0, 'w'},
@@ -61,17 +69,17 @@ int main(int argc, char *argv[])
 		switch(c)
 		{
 			case 'w':
-				status = radio_hal_attach(RADIO_WIFI);
+				status = radio_hal_attach(ctx, RADIO_WIFI);
 				if (status)
 					printf("failed to attach Wifi Radio HAL\n");
 				break;
 			case 'b':
-				status = radio_hal_attach(RADIO_BT);
+				status = radio_hal_attach(ctx, RADIO_BT);
 				if (status)
 					printf("failed to attach BT Radio HAL\n");
 				break;
 			case 'z':
-				status = radio_hal_attach(RADIO_15_4);
+				status = radio_hal_attach(ctx, RADIO_15_4);
 				if (status)
 					printf("failed to attach 15.4 Radio HAL\n");
 				break;

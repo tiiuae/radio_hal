@@ -93,7 +93,7 @@ struct radio_context
 	void *radio_private;
 };
 
-int radio_hal_attach(enum radio_type type);
-int radio_hal_dettach(enum radio_type type);
+int radio_hal_attach(struct radio_context *ctx, enum radio_type type);
+int radio_hal_dettach(struct radio_context *ctx, enum radio_type type);
 
 #endif
