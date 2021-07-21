@@ -6,6 +6,7 @@ all: ${ALL}
 LDFLAGS += -rdynamic
 INC_DIR = inc
 SRC_DIR = src
+CMN_SRC_DIR = common
 
 ifndef CXX
 CXX=g++
@@ -20,7 +21,7 @@ CFLAGS = -MMD -O2 -Wall -g -I$(INC_DIR)
 CFLAGS += -std=${CXXSTD}
 endif
 
-OBJ=$(SRC_DIR)/radio_hal_main.o
+OBJ=$(SRC_DIR)/$(CMN_SRC_DIR)/radio_hal_main.o
 
 %.o: %.cpp
 	$(CXX) -c -fPIC $(CFLAGS) ${COPTS} $< -o $@

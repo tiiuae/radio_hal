@@ -14,9 +14,7 @@ enum radio_state {
 enum radio_type {
 	RADIO_WIFI,
 	RADIO_BT,
-	RADIO_ZIGBEE,
-	RADIO_LORA,
-	RADIO_MAX,
+	RADIO_15_4,
 };
 
 enum radio_feature {
@@ -95,7 +93,7 @@ struct radio_context
 	void *radio_private;
 };
 
-int radio_hal_attach(radio_gen_func_t *func, enum radio_type type);
-int radio_hal_dettach(radio_gen_func_t *func, enum radio_type type);
+int radio_hal_attach(enum radio_type type);
+int radio_hal_dettach(enum radio_type type);
 
 #endif
