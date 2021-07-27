@@ -18,9 +18,11 @@ CXXSTD=c++14
 endif
 
 ifndef CFLAGS
-CFLAGS = -MMD -O2 -Wall -g -I$(INC_DIR) -I$(SRC_DIR)/$(WIFI_HAL_DIR)
+CFLAGS = -MMD -O2 -Wall -g -I$(INC_DIR) -I$(SRC_DIR)/$(WIFI_HAL_DIR) -I/usr/include/libnl3/
 CFLAGS += -std=${CXXSTD}
 endif
+
+LDFLAGS=$(shell pkg-config --libs libnl-3.0 libnl-genl-3.0)
 
 OBJ=$(SRC_DIR)/$(CMN_SRC_DIR)/radio_hal_main.o $(SRC_DIR)/$(WIFI_HAL_DIR)/wifi_hal_main.o
 
@@ -33,7 +35,7 @@ libradio_hal.so: $(OBJ)
 
 
 radio_hal_daemon: libradio_hal.so
-	$(CXX) -o $@ $(CXXFLAGS) $(CFLAGS) -Wall $^ -L. -lradio_hal
+	$(CXX) -o $@ $(CXXFLAGS) $(CFLAGS) -Wall $^ -L. -lradio_hal $(LDFLAGS)
 
 install:
 	cp -a -f radio_hal_daemon $(INSTALL_ROOT)/usr/bin/
