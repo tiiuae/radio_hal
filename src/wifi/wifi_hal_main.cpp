@@ -89,20 +89,38 @@ nla_put_failure:
 
 int wifi_hal_attach(struct radio_context *ctx)
 {
+	struct wifi_sotftc *sc = NULL;
 	int err = 0;
 
 	ctx = (struct radio_context *)malloc(sizeof(struct radio_context));
-	if (ctx == NULL) {
+	if (!ctx) {
 		printf("failed to allocate radio hal ctx");
 		return -ENOMEM;
 	}
 
+	sc = (struct wifi_sotftc *)malloc(sizeof(struct wifi_sotftc));
+	if (!sc) {
+		printf("failed to allocate wifi softc ctx");
+		err =  -ENOMEM;
+		goto sc_alloc_failure;
+	}
+
+	ctx->radio_private = (void*)sc;
+
+	return 0;
+
+sc_alloc_failure:
+	free(ctx);
 	return err;
 }
 
 int wifi_hal_dettach(struct radio_context *ctx)
 {
+	struct wifi_sotftc *sc = (struct wifi_sotftc *)ctx->radio_private;
 	int err = 0;
+
+	if (sc)
+		free(sc);
 
 	if (ctx)
 		free(ctx);
