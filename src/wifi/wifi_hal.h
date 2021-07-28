@@ -3,7 +3,6 @@
 
 #include <string>
 #include "radio_hal.h"
-
 enum wifi_state {
 	IF_DOWN_STATE,
 	IF_UP_STATE,
@@ -16,13 +15,14 @@ struct netlink_ctx {
 	struct nl_sock *sock;
 	int nl80211_id;
 	int ifindex;
+	char ifname[RADIO_IFNAME_SIZE];
+	struct nl_cb *if_cb;
+	int if_cb_err;
 };
 
 struct wifi_sotftc {
 	unsigned char mac_addr[6];
-	struct netlink_ctx ctx;
-	char ifname[30];
-	int ifindex;
+	struct netlink_ctx nl_ctx;
 	int signal;
 	int txrate;
 	int rxrate;
