@@ -2,6 +2,7 @@
 #define __RADIO_HAL_H__
 
 #define RADIO_IFNAME_SIZE 16
+#define RADIO_HAL_VERSION_SIZE 32
 
 enum radio_state {
 	RADIO_IDLE_STATE,
@@ -60,7 +61,7 @@ struct {
 typedef struct radio_generic_func {
 	int (*open)(struct radio_context *ctx, enum radio_type type);
 	int (*close)(struct radio_context *ctx, enum radio_type type);
-	int (*radio_get_hal_version)(int *version);
+	int (*radio_get_hal_version)(char *version);
 	int (* radio_initialize) (struct radio_context *ctx);
 	int (* radio_wait_for_driver_ready) (struct radio_context *ctx);
 	void (* radio_cleanup) (struct radio_context *ctx);
@@ -82,7 +83,7 @@ struct radio_common
 {
 	const char *radio_name;
 	enum radio_type type;
-	int hal_version;
+	char hal_version[RADIO_HAL_VERSION_SIZE];
 	unsigned char mac_addr[6];
 	struct radio_generic_func rd_func;
 };

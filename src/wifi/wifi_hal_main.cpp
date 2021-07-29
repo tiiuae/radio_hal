@@ -9,6 +9,9 @@
 #include <netlink/socket.h>
 #include <linux/nl80211.h>
 
+#define WIFI_RADIO_HAL_MAJOR_VERSION 1
+#define WIFI_RADIO_HAL_MINOR_VERSION 0
+
 static int wifi_hal_nl_finish_handler(struct nl_msg *msg, void *arg)
 {
 	int *err = (int *)arg;
@@ -162,6 +165,54 @@ static int wifi_hal_get_interface(struct netlink_ctx *nl_ctx)
 		return -EINVAL;
 
 	return 0;
+}
+
+static int wifi_hal_open(struct radio_context *ctx, enum radio_type type)
+{
+	struct wifi_sotftc *sc = (struct wifi_sotftc *)ctx->radio_private;
+	int err;
+
+	err = wifi_hal_get_interface(&sc->nl_ctx);
+	printf("wifi interface: %s , interface index = %d\n", sc->nl_ctx.ifname, sc->nl_ctx.ifindex);
+
+	return 0;
+}
+
+static int wifi_hal_close(struct radio_context *ctx, enum radio_type type)
+{
+	struct wifi_sotftc *sc = (struct wifi_sotftc *)ctx->radio_private;
+
+	memset(sc->nl_ctx.ifname, 0,  RADIO_IFNAME_SIZE);
+	sc->nl_ctx.ifindex = 0;
+
+	return 0;
+}
+
+
+static int wifi_hal_get_hal_version(char *version)
+{
+	snprintf(version, 32, "%d.%d", WIFI_RADIO_HAL_MAJOR_VERSION, WIFI_RADIO_HAL_MINOR_VERSION);
+
+	return 0;
+}
+
+int wifi_hal_get_iface_name(struct radio_context *ctx, char *name, int radio_index)
+{
+	struct wifi_sotftc *sc = (struct wifi_sotftc *)ctx->radio_private;
+
+	memcpy(name, sc->nl_ctx.ifname, RADIO_IFNAME_SIZE);
+
+	return 0;
+}
+
+int wifi_hal_register_ops(struct radio_context *ctx)
+{
+	struct radio_generic_func *wifi_radio_ops = &ctx->cmn.rd_func;
+
+	wifi_radio_ops->open = wifi_hal_open;
+	wifi_radio_ops->close = wifi_hal_close;
+	wifi_radio_ops->radio_get_hal_version = wifi_hal_get_hal_version;
+	wifi_radio_ops->radio_get_iface_name = wifi_hal_get_iface_name;
 }
 
 int wifi_hal_attach(struct radio_context *ctx)
