@@ -1,16 +1,20 @@
 #include <stdio.h>
+#include <string.h>
 #include <getopt.h>
 #include "radio_hal.h"
 #include "wifi_hal.h"
 
-int radio_hal_attach(struct radio_context *ctx, enum radio_type type)
+#define RADIO_HAL_UNIT_TEST
+
+struct radio_context* radio_hal_attach(enum radio_type type)
 {
+	struct radio_context *ctx;
 	int err = 0;
 
 	switch(type)
 	{
 		case RADIO_WIFI:
-			err = wifi_hal_attach(ctx);
+			ctx = wifi_hal_attach();
 			break;
 		case RADIO_BT:
 			break;
@@ -18,7 +22,7 @@ int radio_hal_attach(struct radio_context *ctx, enum radio_type type)
 			break;
 	}
 
-	return err;
+	return ctx;
 }
 
 int radio_hal_dettach(struct radio_context *ctx, enum radio_type type)
@@ -39,7 +43,40 @@ int radio_hal_dettach(struct radio_context *ctx, enum radio_type type)
 	return 0;
 }
 
-void show_radio_hal_help()
+#ifdef RADIO_HAL_UNIT_TEST
+static int test_radio_hal_api(struct radio_context *ctx, char *cmd,
+			       enum radio_type type)
+{
+	int err = 0;
+	char version[32] = {0};
+	char ifname[RADIO_IFNAME_SIZE] = {0};
+	struct radio_generic_func *radio_ops = ctx->cmn.rd_func;
+
+	switch(type)
+	{
+		case RADIO_WIFI:
+			if(!strcmp(cmd, "radio_get_hal_version"))
+			{
+				radio_ops->open(ctx, RADIO_WIFI);
+				radio_ops->radio_get_hal_version(version);
+				printf("VERSION:%s\n", &version);
+			} else if(!strcmp(cmd, "radio_hal_get_iface_name"))
+			{
+				radio_ops->open(ctx, RADIO_WIFI);
+				radio_ops->radio_get_iface_name(ctx, ifname, 1);
+				printf("IFNAME:%s\n", &ifname);
+			}
+			break;
+		case RADIO_BT:
+			break;
+		case RADIO_15_4:
+			break;
+	}
+
+	return err;
+}
+
+static void show_radio_hal_help()
 {
 	printf("\n------------------------- Radio HAL uses --------------------------------\n");
 	printf("./radio_hal_daemon -w <radio index> Attach wifi radio HAL \n");
@@ -51,9 +88,9 @@ void show_radio_hal_help()
 int main(int argc, char *argv[])
 {
 	int status, c;
-	const char	*short_opt = "w::b::z::h::";
+	const char *short_opt = "w::b::z::h::";
 	int long_opt_ptr;
-	struct radio_context *ctx;
+	struct radio_context *ctx = NULL;
 	struct option long_opt[] =
 	{
 		{"wifi", required_argument,0, 'w'},
@@ -62,25 +99,27 @@ int main(int argc, char *argv[])
 		{"help", optional_argument,0, 'h'}
 	};
 
-	printf("*  argc = %d argv = %s \n",argc,argv[0]);
+	printf("*  argc = %d argv = %s %s\n",argc,argv[0], argv[2]);
 	while((c = getopt_long(argc, argv, short_opt, long_opt, &long_opt_ptr)) != -1)
 	{
 
 		switch(c)
 		{
 			case 'w':
-				status = radio_hal_attach(ctx, RADIO_WIFI);
-				if (status)
+				ctx = radio_hal_attach(RADIO_WIFI);
+				if (!ctx)
 					printf("failed to attach Wifi Radio HAL\n");
+				if (argc >= 3)
+					test_radio_hal_api(ctx, argv[2], RADIO_WIFI);
 				break;
 			case 'b':
-				status = radio_hal_attach(ctx, RADIO_BT);
-				if (status)
+				ctx = radio_hal_attach(RADIO_BT);
+				if (!ctx)
 					printf("failed to attach BT Radio HAL\n");
 				break;
 			case 'z':
-				status = radio_hal_attach(ctx, RADIO_15_4);
-				if (status)
+				ctx = radio_hal_attach(RADIO_15_4);
+				if (!ctx)
 					printf("failed to attach 15.4 Radio HAL\n");
 				break;
 			case 'h':
@@ -91,3 +130,4 @@ int main(int argc, char *argv[])
 
 	return 0;
 }
+#endif

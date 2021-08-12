@@ -33,7 +33,7 @@ struct wifi_sotftc {
 	enum wifi_state state;
 };
 
-int wifi_hal_attach(struct radio_context *ctx);
+struct radio_context* wifi_hal_attach();
 int wifi_hal_dettach(struct radio_context *ctx);
 
 #endif

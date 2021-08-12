@@ -81,11 +81,11 @@ typedef struct radio_generic_func {
 
 struct radio_common
 {
-	const char *radio_name;
+	char radio_name[RADIO_IFNAME_SIZE];
 	enum radio_type type;
 	char hal_version[RADIO_HAL_VERSION_SIZE];
 	unsigned char mac_addr[6];
-	struct radio_generic_func rd_func;
+	struct radio_generic_func *rd_func;
 };
 
 struct radio_context
@@ -94,7 +94,7 @@ struct radio_context
 	void *radio_private;
 };
 
-int radio_hal_attach(struct radio_context *ctx, enum radio_type type);
+struct radio_context* radio_hal_attach(enum radio_type type);
 int radio_hal_dettach(struct radio_context *ctx, enum radio_type type);
 
 #endif

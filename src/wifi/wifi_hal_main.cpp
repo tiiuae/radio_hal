@@ -167,6 +167,22 @@ static int wifi_hal_get_interface(struct netlink_ctx *nl_ctx)
 	return 0;
 }
 
+static int wifi_hal_get_hal_version(char *version)
+{
+	snprintf(version, 32, "%d.%d", WIFI_RADIO_HAL_MAJOR_VERSION, WIFI_RADIO_HAL_MINOR_VERSION);
+
+	return 0;
+}
+
+int wifi_hal_get_iface_name(struct radio_context *ctx, char *name, int radio_index)
+{
+	struct wifi_sotftc *sc = (struct wifi_sotftc *)ctx->radio_private;
+
+	memcpy(name, sc->nl_ctx.ifname, RADIO_IFNAME_SIZE);
+
+	return 0;
+}
+
 static int wifi_hal_open(struct radio_context *ctx, enum radio_type type)
 {
 	struct wifi_sotftc *sc = (struct wifi_sotftc *)ctx->radio_private;
@@ -188,44 +204,29 @@ static int wifi_hal_close(struct radio_context *ctx, enum radio_type type)
 	return 0;
 }
 
-
-static int wifi_hal_get_hal_version(char *version)
-{
-	snprintf(version, 32, "%d.%d", WIFI_RADIO_HAL_MAJOR_VERSION, WIFI_RADIO_HAL_MINOR_VERSION);
-
-	return 0;
-}
-
-int wifi_hal_get_iface_name(struct radio_context *ctx, char *name, int radio_index)
-{
-	struct wifi_sotftc *sc = (struct wifi_sotftc *)ctx->radio_private;
-
-	memcpy(name, sc->nl_ctx.ifname, RADIO_IFNAME_SIZE);
-
-	return 0;
-}
+static struct radio_generic_func wifi_hal_ops = {
+	.open = wifi_hal_open,
+	.close = wifi_hal_close,
+	.radio_get_hal_version = wifi_hal_get_hal_version,
+	.radio_get_iface_name = wifi_hal_get_iface_name,
+};
 
 int wifi_hal_register_ops(struct radio_context *ctx)
 {
-	struct radio_generic_func *wifi_radio_ops = &ctx->cmn.rd_func;
-
-	wifi_radio_ops->open = wifi_hal_open;
-	wifi_radio_ops->close = wifi_hal_close;
-	wifi_radio_ops->radio_get_hal_version = wifi_hal_get_hal_version;
-	wifi_radio_ops->radio_get_iface_name = wifi_hal_get_iface_name;
+	ctx->cmn.rd_func = &wifi_hal_ops;
 }
 
-int wifi_hal_attach(struct radio_context *ctx)
+struct radio_context*  wifi_hal_attach()
 {
+	struct radio_context *ctx = NULL;
 	struct wifi_sotftc *sc = NULL;
 	int err = 0;
 
 	ctx = (struct radio_context *)malloc(sizeof(struct radio_context));
 	if (!ctx) {
 		printf("failed to allocate radio hal ctx\n");
-		return -ENOMEM;
+		return NULL;
 	}
-
 	sc = (struct wifi_sotftc *)malloc(sizeof(struct wifi_sotftc));
 	if (!sc) {
 		printf("failed to allocate wifi softc ctx\n");
@@ -245,10 +246,10 @@ int wifi_hal_attach(struct radio_context *ctx)
 		printf("failed to register nl80211 callback\n");
 		goto nl_cb_attach_failure;
 	}
-
+	ctx->cmn.rd_func = &wifi_hal_ops;
 	printf("WiFi HAL attach completed\n");
 
-	return 0;
+	return ctx;
 
 nl_cb_attach_failure:
 	wifi_hal_nl80211_dettach(&sc->nl_ctx);
@@ -256,7 +257,7 @@ nl_attach_failure:
 	free(sc);
 sc_alloc_failure:
 	free(ctx);
-	return err;
+	return NULL;
 }
 
 int wifi_hal_dettach(struct radio_context *ctx)
@@ -274,3 +275,4 @@ int wifi_hal_dettach(struct radio_context *ctx)
 	printf("WiFi HAL dettach completed\n");
 	return err;
 }
+
