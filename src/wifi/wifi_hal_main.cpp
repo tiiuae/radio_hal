@@ -22,7 +22,8 @@ static int wifi_hal_nl_finish_handler(struct nl_msg *msg, void *arg)
 
 static int wifi_hal_ifname_resp_hdlr(struct nl_msg *msg, void *arg)
 {
-	struct netlink_ctx *nl_ctx = (struct netlink_ctx *)arg;
+	struct wifi_sotftc *sc = (struct wifi_sotftc *)arg;
+	struct netlink_ctx *nl_ctx = &sc->nl_ctx;
 	struct genlmsghdr *hdr = (struct genlmsghdr *)nlmsg_data(nlmsg_hdr(msg));
 
 	struct nlattr *tb_msg[NL80211_ATTR_MAX + 1];
@@ -44,8 +45,10 @@ static int wifi_hal_ifname_resp_hdlr(struct nl_msg *msg, void *arg)
 	return NL_SKIP;
 }
 
-static int wifi_hal_register_nl_cb(struct netlink_ctx *nl_ctx)
+static int wifi_hal_register_nl_cb(struct wifi_sotftc *sc)
 {
+	struct netlink_ctx *nl_ctx = &sc->nl_ctx;
+
 	nl_ctx->if_cb = nl_cb_alloc(NL_CB_DEFAULT);
 	if (!nl_ctx->if_cb)
 	{
@@ -53,14 +56,15 @@ static int wifi_hal_register_nl_cb(struct netlink_ctx *nl_ctx)
 		return -ENOMEM;
 	}
 
-	nl_cb_set(nl_ctx->if_cb, NL_CB_VALID , NL_CB_CUSTOM, wifi_hal_ifname_resp_hdlr, nl_ctx);
+	nl_cb_set(nl_ctx->if_cb, NL_CB_VALID , NL_CB_CUSTOM, wifi_hal_ifname_resp_hdlr, sc);
 	nl_cb_set(nl_ctx->if_cb, NL_CB_FINISH, NL_CB_CUSTOM, wifi_hal_nl_finish_handler, &(nl_ctx->if_cb_err));
 
 	return 0;
 }
 
-static int wifi_hal_nl80211_attach(struct netlink_ctx *nl_ctx)
+static int wifi_hal_nl80211_attach(struct wifi_sotftc *sc)
 {
+	struct netlink_ctx *nl_ctx = &sc->nl_ctx;
 	struct nl_sock *sock;
 	int err;
 
@@ -91,8 +95,9 @@ out:
 	return err;
 }
 
-static void wifi_hal_nl80211_dettach(struct netlink_ctx *nl_ctx)
+static void wifi_hal_nl80211_dettach(struct wifi_sotftc *sc)
 {
+	struct netlink_ctx *nl_ctx = &sc->nl_ctx;
 	nl_socket_free(nl_ctx->sock);
 }
 
@@ -235,13 +240,13 @@ struct radio_context*  wifi_hal_attach()
 	}
 
 	ctx->radio_private = (void*)sc;
-	err = wifi_hal_nl80211_attach(&sc->nl_ctx);
+	err = wifi_hal_nl80211_attach(sc);
 	if (err) {
 		printf("failed to attach with nl80211\n");
 		goto nl_attach_failure;
 	}
 
-	err = wifi_hal_register_nl_cb(&sc->nl_ctx);
+	err = wifi_hal_register_nl_cb(sc);
 	if (err) {
 		printf("failed to register nl80211 callback\n");
 		goto nl_cb_attach_failure;
@@ -252,7 +257,7 @@ struct radio_context*  wifi_hal_attach()
 	return ctx;
 
 nl_cb_attach_failure:
-	wifi_hal_nl80211_dettach(&sc->nl_ctx);
+	wifi_hal_nl80211_dettach(sc);
 nl_attach_failure:
 	free(sc);
 sc_alloc_failure:
@@ -265,7 +270,7 @@ int wifi_hal_dettach(struct radio_context *ctx)
 	struct wifi_sotftc *sc = (struct wifi_sotftc *)ctx->radio_private;
 	int err = 0;
 
-	wifi_hal_nl80211_dettach(&sc->nl_ctx);
+	wifi_hal_nl80211_dettach(sc);
 	if (sc)
 		free(sc);
 
