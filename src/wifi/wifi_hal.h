@@ -17,7 +17,9 @@ struct netlink_ctx {
 	int ifindex;
 	char ifname[RADIO_IFNAME_SIZE];
 	struct nl_cb *if_cb;
+	struct nl_cb *link_info_cb;
 	int if_cb_err;
+	int linkinfo_cb_err;
 };
 
 struct wifi_sotftc {

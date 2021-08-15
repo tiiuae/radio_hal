@@ -1,3 +1,4 @@
+#include <unistd.h>
 #include "radio_hal.h"
 #include "wifi_hal.h"
 #include <netlink/attr.h>
@@ -5,12 +6,14 @@
 #include <netlink/genl/genl.h>
 #include <netlink/handlers.h>
 #include <netlink/msg.h>
+#include <netlink/genl/family.h>
 #include <netlink/netlink.h>
 #include <netlink/socket.h>
 #include <linux/nl80211.h>
 
 #define WIFI_RADIO_HAL_MAJOR_VERSION 1
 #define WIFI_RADIO_HAL_MINOR_VERSION 0
+
 
 static int wifi_hal_nl_finish_handler(struct nl_msg *msg, void *arg)
 {
@@ -45,6 +48,71 @@ static int wifi_hal_ifname_resp_hdlr(struct nl_msg *msg, void *arg)
 	return NL_SKIP;
 }
 
+static int wifi_hal_connection_info_hdlr(struct nl_msg *msg, void *arg)
+{
+	struct wifi_sotftc *sc = (struct wifi_sotftc *)arg;
+	struct netlink_ctx *nl_ctx = &sc->nl_ctx;
+	struct nlattr *tb_msg[NL80211_ATTR_MAX + 1];
+	struct genlmsghdr *hdr = (struct genlmsghdr *)nlmsg_data(nlmsg_hdr(msg));
+	struct nlattr *sinfo[NL80211_STA_INFO_MAX + 1];
+	struct nlattr *rinfo[NL80211_RATE_INFO_MAX + 1];
+	static struct nla_policy sta_info[NL80211_STA_INFO_MAX + 1] = {0};
+	static struct nla_policy rate_info[NL80211_RATE_INFO_MAX + 1] = {0};
+
+	sta_info[NL80211_STA_INFO_INACTIVE_TIME].type = NLA_U32;
+	sta_info[NL80211_STA_INFO_RX_BYTES].type = NLA_U32;
+	sta_info[NL80211_STA_INFO_TX_BYTES].type = NLA_U32;
+	sta_info[NL80211_STA_INFO_RX_PACKETS].type = NLA_U32;
+	sta_info[NL80211_STA_INFO_TX_PACKETS].type = NLA_U32;
+	sta_info[NL80211_STA_INFO_SIGNAL].type = NLA_U8;
+	sta_info[NL80211_STA_INFO_TX_BITRATE].type = NLA_NESTED;
+	sta_info[NL80211_STA_INFO_LLID].type = NLA_U16;
+	sta_info[NL80211_STA_INFO_PLID].type = NLA_U16;
+	sta_info[NL80211_STA_INFO_PLINK_STATE].type = NLA_U8;
+
+
+	rate_info[NL80211_RATE_INFO_BITRATE].type = NLA_U16;
+	rate_info[NL80211_RATE_INFO_MCS].type = NLA_U8;
+	rate_info[NL80211_RATE_INFO_40_MHZ_WIDTH].type = NLA_FLAG;
+	rate_info[NL80211_RATE_INFO_SHORT_GI].type = NLA_FLAG;
+
+	nla_parse(tb_msg,
+            NL80211_ATTR_MAX,
+            genlmsg_attrdata(hdr, 0),
+            genlmsg_attrlen(hdr, 0),
+            NULL);
+
+	if (!tb_msg[NL80211_ATTR_STA_INFO]) {
+		printf("failed to parse sta info\n");
+		return NL_SKIP;
+	}
+
+	if (nla_parse_nested(sinfo, NL80211_STA_INFO_MAX,
+		tb_msg[NL80211_ATTR_STA_INFO], sta_info)) {
+		printf("failed to parse nested sta info\n");
+		return NL_SKIP;
+	}
+
+	if (sinfo[NL80211_STA_INFO_SIGNAL]) {
+		sc->signal = 100+(int8_t)nla_get_u8(sinfo[NL80211_STA_INFO_SIGNAL]);
+	}
+
+	if (sinfo[NL80211_STA_INFO_TX_BITRATE])
+	{
+		if (nla_parse_nested(rinfo, NL80211_RATE_INFO_MAX,
+			sinfo[NL80211_STA_INFO_TX_BITRATE], rate_info))
+		{
+			printf("failed to parse nested rate attributes!\n");
+		}
+		else {
+			if (rinfo[NL80211_RATE_INFO_BITRATE]) {
+				sc->txrate = nla_get_u16(rinfo[NL80211_RATE_INFO_BITRATE]);
+			}
+		}
+	}
+	return NL_SKIP;
+}
+
 static int wifi_hal_register_nl_cb(struct wifi_sotftc *sc)
 {
 	struct netlink_ctx *nl_ctx = &sc->nl_ctx;
@@ -56,8 +124,17 @@ static int wifi_hal_register_nl_cb(struct wifi_sotftc *sc)
 		return -ENOMEM;
 	}
 
+	nl_ctx->link_info_cb = nl_cb_alloc(NL_CB_DEFAULT);
+	if (!nl_ctx->link_info_cb)
+	{
+		printf("failed to allocate link info NL callback.\n");
+		return -ENOMEM;
+	}
+
 	nl_cb_set(nl_ctx->if_cb, NL_CB_VALID , NL_CB_CUSTOM, wifi_hal_ifname_resp_hdlr, sc);
 	nl_cb_set(nl_ctx->if_cb, NL_CB_FINISH, NL_CB_CUSTOM, wifi_hal_nl_finish_handler, &(nl_ctx->if_cb_err));
+	nl_cb_set(nl_ctx->link_info_cb, NL_CB_VALID , NL_CB_CUSTOM, wifi_hal_connection_info_hdlr, sc);
+	nl_cb_set(nl_ctx->link_info_cb, NL_CB_FINISH, NL_CB_CUSTOM, wifi_hal_nl_finish_handler, &(nl_ctx->linkinfo_cb_err));
 
 	return 0;
 }
@@ -168,6 +245,36 @@ static int wifi_hal_get_interface(struct netlink_ctx *nl_ctx)
 
 	if (nl_ctx->ifindex < 0)
 		return -EINVAL;
+
+	return 0;
+}
+
+static int wifi_hal_get_stainfo(struct netlink_ctx *nl_ctx)
+{
+	struct nl_msg* sta_info_msg = nlmsg_alloc();
+	int err = 0;
+
+	if (!sta_info_msg) {
+		printf("failed to allocate sta info  NL  message.\n");
+		return -ENOMEM;
+	}
+	genlmsg_put(sta_info_msg,
+		    NL_AUTO_PORT,
+		    NL_AUTO_SEQ,
+		    nl_ctx->nl80211_id,
+		    0,
+		    NLM_F_DUMP,
+		    NL80211_CMD_GET_STATION,
+		    0);
+
+	nl_ctx->linkinfo_cb_err = 1;
+	nla_put_u32(sta_info_msg, NL80211_ATTR_IFINDEX, nl_ctx->ifindex);
+	err = nl_send_auto(nl_ctx->sock, sta_info_msg);
+	while (nl_ctx->linkinfo_cb_err > 0)
+	{
+		nl_recvmsgs(nl_ctx->sock, nl_ctx->link_info_cb);
+	}
+	nlmsg_free(sta_info_msg);
 
 	return 0;
 }
