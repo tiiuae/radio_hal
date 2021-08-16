@@ -66,6 +66,7 @@ static int wifi_hal_connection_info_hdlr(struct nl_msg *msg, void *arg)
 	sta_info[NL80211_STA_INFO_TX_PACKETS].type = NLA_U32;
 	sta_info[NL80211_STA_INFO_SIGNAL].type = NLA_U8;
 	sta_info[NL80211_STA_INFO_TX_BITRATE].type = NLA_NESTED;
+	sta_info[NL80211_STA_INFO_RX_BITRATE].type = NLA_NESTED;
 	sta_info[NL80211_STA_INFO_LLID].type = NLA_U16;
 	sta_info[NL80211_STA_INFO_PLID].type = NLA_U16;
 	sta_info[NL80211_STA_INFO_PLINK_STATE].type = NLA_U8;
@@ -94,7 +95,7 @@ static int wifi_hal_connection_info_hdlr(struct nl_msg *msg, void *arg)
 	}
 
 	if (sinfo[NL80211_STA_INFO_SIGNAL]) {
-		sc->signal = 100+(int8_t)nla_get_u8(sinfo[NL80211_STA_INFO_SIGNAL]);
+		sc->signal = (int8_t)nla_get_u8(sinfo[NL80211_STA_INFO_SIGNAL]);
 	}
 
 	if (sinfo[NL80211_STA_INFO_TX_BITRATE])
@@ -110,6 +111,22 @@ static int wifi_hal_connection_info_hdlr(struct nl_msg *msg, void *arg)
 			}
 		}
 	}
+
+	if (sinfo[NL80211_STA_INFO_RX_BITRATE])
+	{
+		if (nla_parse_nested(rinfo, NL80211_RATE_INFO_MAX,
+			sinfo[NL80211_STA_INFO_RX_BITRATE], rate_info))
+		{
+			printf("failed to parse nested rate attributes!\n");
+		}
+		else {
+			if (rinfo[NL80211_RATE_INFO_BITRATE]) {
+				sc->rxrate = nla_get_u16(rinfo[NL80211_RATE_INFO_BITRATE]);
+			}
+		}
+	}
+
+
 	return NL_SKIP;
 }
 
@@ -295,6 +312,25 @@ int wifi_hal_get_iface_name(struct radio_context *ctx, char *name, int radio_ind
 	return 0;
 }
 
+/* To Do: Check connection state */
+static int wifi_hal_get_rssi (struct radio_context *ctx, int radio_index)
+{
+	struct wifi_sotftc *sc = (struct wifi_sotftc *)ctx->radio_private;
+	return sc->signal;
+}
+
+static int wifi_hal_get_txrate (struct radio_context *ctx, int radio_index)
+{
+	struct wifi_sotftc *sc = (struct wifi_sotftc *)ctx->radio_private;
+	return sc->txrate;
+}
+
+static int wifi_hal_get_rxrate (struct radio_context *ctx, int radio_index)
+{
+	struct wifi_sotftc *sc = (struct wifi_sotftc *)ctx->radio_private;
+	return sc->rxrate;
+}
+
 static int wifi_hal_open(struct radio_context *ctx, enum radio_type type)
 {
 	struct wifi_sotftc *sc = (struct wifi_sotftc *)ctx->radio_private;
@@ -321,6 +357,9 @@ static struct radio_generic_func wifi_hal_ops = {
 	.close = wifi_hal_close,
 	.radio_get_hal_version = wifi_hal_get_hal_version,
 	.radio_get_iface_name = wifi_hal_get_iface_name,
+	.radio_get_rssi = wifi_hal_get_rssi,
+	.radio_get_txrate = wifi_hal_get_txrate,
+	.radio_get_rxrate = wifi_hal_get_rxrate,
 };
 
 int wifi_hal_register_ops(struct radio_context *ctx)

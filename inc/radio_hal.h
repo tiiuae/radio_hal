@@ -76,6 +76,9 @@ typedef struct radio_generic_func {
 	int (* radio_get_supported_channels)(struct radio_context *ctx, struct radio_channel_spec *ch_list, int *no_ch);
 	int (* radio_get_operating_channel) (struct radio_context *ctx, int radio_index);
 	int (* radio_get_mac_address) (struct radio_context *ctx, int radio_index);
+	int (* radio_get_rssi) (struct radio_context *ctx, int radio_index);
+	int (* radio_get_txrate) (struct radio_context *ctx, int radio_index);
+	int (* radio_get_rxrate) (struct radio_context *ctx, int radio_index);
 
 } radio_gen_func_t;
 
