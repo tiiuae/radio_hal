@@ -60,11 +60,19 @@ static int test_radio_hal_api(struct radio_context *ctx, char *cmd,
 				radio_ops->open(ctx, RADIO_WIFI);
 				radio_ops->radio_get_hal_version(version);
 				printf("VERSION:%s\n", &version);
-			} else if(!strcmp(cmd, "radio_hal_get_iface_name"))
-			{
+			} else if(!strcmp(cmd, "radio_hal_get_iface_name")) {
 				radio_ops->open(ctx, RADIO_WIFI);
 				radio_ops->radio_get_iface_name(ctx, ifname, 1);
 				printf("IFNAME:%s\n", &ifname);
+			} else if(!strcmp(cmd, "radio_hal_get_rssi")) {
+				radio_ops->open(ctx, RADIO_WIFI);
+				printf("RSSI:%d dbm\n", radio_ops->radio_get_rssi(ctx, 1));
+			} else if(!strcmp(cmd, "radio_hal_get_txrate")) {
+				radio_ops->open(ctx, RADIO_WIFI);
+				printf("TXRATE:%d MBit/s\n", radio_ops->radio_get_txrate(ctx, 1));
+			} else if(!strcmp(cmd, "radio_hal_get_rxrate")) {
+				radio_ops->open(ctx, RADIO_WIFI);
+				printf("RXRATE:%d MBit/s\n", radio_ops->radio_get_rxrate(ctx, 1));
 			}
 			break;
 		case RADIO_BT:

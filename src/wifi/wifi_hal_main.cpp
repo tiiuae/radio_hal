@@ -107,7 +107,7 @@ static int wifi_hal_connection_info_hdlr(struct nl_msg *msg, void *arg)
 		}
 		else {
 			if (rinfo[NL80211_RATE_INFO_BITRATE]) {
-				sc->txrate = nla_get_u16(rinfo[NL80211_RATE_INFO_BITRATE]);
+				sc->txrate = nla_get_u16(rinfo[NL80211_RATE_INFO_BITRATE])/10;
 			}
 		}
 	}
@@ -121,7 +121,7 @@ static int wifi_hal_connection_info_hdlr(struct nl_msg *msg, void *arg)
 		}
 		else {
 			if (rinfo[NL80211_RATE_INFO_BITRATE]) {
-				sc->rxrate = nla_get_u16(rinfo[NL80211_RATE_INFO_BITRATE]);
+				sc->rxrate = nla_get_u16(rinfo[NL80211_RATE_INFO_BITRATE])/10;
 			}
 		}
 	}
@@ -316,18 +316,30 @@ int wifi_hal_get_iface_name(struct radio_context *ctx, char *name, int radio_ind
 static int wifi_hal_get_rssi (struct radio_context *ctx, int radio_index)
 {
 	struct wifi_sotftc *sc = (struct wifi_sotftc *)ctx->radio_private;
+
+	wifi_hal_get_interface(&sc->nl_ctx);
+	wifi_hal_get_stainfo(&sc->nl_ctx);
+
 	return sc->signal;
 }
 
 static int wifi_hal_get_txrate (struct radio_context *ctx, int radio_index)
 {
 	struct wifi_sotftc *sc = (struct wifi_sotftc *)ctx->radio_private;
+	
+	wifi_hal_get_interface(&sc->nl_ctx);
+	wifi_hal_get_stainfo(&sc->nl_ctx);
+
 	return sc->txrate;
 }
 
 static int wifi_hal_get_rxrate (struct radio_context *ctx, int radio_index)
 {
 	struct wifi_sotftc *sc = (struct wifi_sotftc *)ctx->radio_private;
+	
+	wifi_hal_get_interface(&sc->nl_ctx);
+	wifi_hal_get_stainfo(&sc->nl_ctx);
+
 	return sc->rxrate;
 }
 
