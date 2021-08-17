@@ -1,4 +1,5 @@
 #include <unistd.h>
+#include <stdint.h>
 #include "radio_hal.h"
 #include "wifi_hal.h"
 #include <netlink/attr.h>
@@ -10,6 +11,7 @@
 #include <netlink/netlink.h>
 #include <netlink/socket.h>
 #include <linux/nl80211.h>
+#include "wifi_frame_helper.h"
 
 #define WIFI_RADIO_HAL_MAJOR_VERSION 1
 #define WIFI_RADIO_HAL_MINOR_VERSION 0
