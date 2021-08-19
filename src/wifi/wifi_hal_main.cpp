@@ -58,7 +58,6 @@ static void get_mac_addr(struct wifi_sotftc *sc, char *mac_addr)
 	mac = (unsigned char*)if_req.ifr_hwaddr.sa_data;
 	mac_addr_n2a(sc->mac_addr, mac);
 	mac_addr_n2a(mac_addr, mac);
-	printf("MAC:%s\n", sc->mac_addr);
 }
 
 static int wifi_hal_ifname_resp_hdlr(struct nl_msg *msg, void *arg)

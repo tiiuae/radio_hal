@@ -50,6 +50,7 @@ static int test_radio_hal_api(struct radio_context *ctx, char *cmd,
 	int err = 0;
 	char version[32] = {0};
 	char ifname[RADIO_IFNAME_SIZE] = {0};
+	char mac_addr[RADIO_MACADDR_SIZE] = {0};
 	struct radio_generic_func *radio_ops = ctx->cmn.rd_func;
 
 	switch(type)
@@ -73,6 +74,10 @@ static int test_radio_hal_api(struct radio_context *ctx, char *cmd,
 			} else if(!strcmp(cmd, "radio_hal_get_rxrate")) {
 				radio_ops->open(ctx, RADIO_WIFI);
 				printf("RXRATE:%d MBit/s\n", radio_ops->radio_get_rxrate(ctx, 1));
+			} else if(!strcmp(cmd, "radio_hal_get_macaddr")) {
+				radio_ops->open(ctx, RADIO_WIFI);
+				radio_ops->radio_get_mac_address(ctx, mac_addr, 1);
+				printf("MACADDR:%s \n", mac_addr);
 			}
 			break;
 		case RADIO_BT:
