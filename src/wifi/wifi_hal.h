@@ -23,7 +23,7 @@ struct netlink_ctx {
 };
 
 struct wifi_sotftc {
-	unsigned char mac_addr[6];
+	char mac_addr[RADIO_MACADDR_SIZE];
 	struct netlink_ctx nl_ctx;
 	int signal;
 	int txrate;

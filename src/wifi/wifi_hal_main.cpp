@@ -10,7 +10,11 @@
 #include <netlink/genl/family.h>
 #include <netlink/netlink.h>
 #include <netlink/socket.h>
+#include <linux/if_ether.h>
 #include <linux/nl80211.h>
+#include <sys/socket.h>
+#include <sys/ioctl.h>
+#include <net/if.h>
 #include "wifi_frame_helper.h"
 
 #define WIFI_RADIO_HAL_MAJOR_VERSION 1
@@ -25,12 +29,43 @@ static int wifi_hal_nl_finish_handler(struct nl_msg *msg, void *arg)
 	return NL_SKIP;
 }
 
+void mac_addr_n2a(char *mac_addr, unsigned char *arg)
+{
+        int i, l;
+
+        l = 0;
+        for (i = 0; i < ETH_ALEN ; i++) {
+                if (i == 0) {
+                        sprintf(mac_addr+l, "%02x", arg[i]);
+                        l += 2;
+                } else {
+                        sprintf(mac_addr+l, ":%02x", arg[i]);
+                        l += 3;
+                }
+        }
+}
+
+static void get_mac_addr(struct wifi_sotftc *sc, char *mac_addr)
+{
+	struct ifreq if_req;
+	int fd = socket(AF_INET, SOCK_DGRAM, 0);
+	unsigned char *mac;
+
+	if_req.ifr_addr.sa_family = AF_INET;
+	strncpy(if_req.ifr_name, sc->nl_ctx.ifname, RADIO_IFNAME_SIZE);
+	ioctl(fd, SIOCGIFHWADDR, &if_req);
+	close(fd);
+	mac = (unsigned char*)if_req.ifr_hwaddr.sa_data;
+	mac_addr_n2a(sc->mac_addr, mac);
+	mac_addr_n2a(mac_addr, mac);
+	printf("MAC:%s\n", sc->mac_addr);
+}
+
 static int wifi_hal_ifname_resp_hdlr(struct nl_msg *msg, void *arg)
 {
 	struct wifi_sotftc *sc = (struct wifi_sotftc *)arg;
 	struct netlink_ctx *nl_ctx = &sc->nl_ctx;
 	struct genlmsghdr *hdr = (struct genlmsghdr *)nlmsg_data(nlmsg_hdr(msg));
-
 	struct nlattr *tb_msg[NL80211_ATTR_MAX + 1];
 
 	nla_parse(tb_msg,
@@ -46,6 +81,7 @@ static int wifi_hal_ifname_resp_hdlr(struct nl_msg *msg, void *arg)
 	if (tb_msg[NL80211_ATTR_IFINDEX]) {
 		(nl_ctx->ifindex = nla_get_u32(tb_msg[NL80211_ATTR_IFINDEX]));
 	}
+
 
 	return NL_SKIP;
 }
@@ -366,11 +402,20 @@ static int wifi_hal_close(struct radio_context *ctx, enum radio_type type)
 	return 0;
 }
 
+static int wifi_hal_get_mac_addr(struct radio_context *ctx, char *mac_addr, int radio_index)
+{
+	struct wifi_sotftc *sc = (struct wifi_sotftc *)ctx->radio_private;
+
+	get_mac_addr(sc, mac_addr);
+	return 0;
+}
+
 static struct radio_generic_func wifi_hal_ops = {
 	.open = wifi_hal_open,
 	.close = wifi_hal_close,
 	.radio_get_hal_version = wifi_hal_get_hal_version,
 	.radio_get_iface_name = wifi_hal_get_iface_name,
+	.radio_get_mac_address = wifi_hal_get_mac_addr,
 	.radio_get_rssi = wifi_hal_get_rssi,
 	.radio_get_txrate = wifi_hal_get_txrate,
 	.radio_get_rxrate = wifi_hal_get_rxrate,
@@ -379,6 +424,8 @@ static struct radio_generic_func wifi_hal_ops = {
 int wifi_hal_register_ops(struct radio_context *ctx)
 {
 	ctx->cmn.rd_func = &wifi_hal_ops;
+
+	return 0;
 }
 
 struct radio_context*  wifi_hal_attach()

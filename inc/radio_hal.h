@@ -3,6 +3,7 @@
 
 #define RADIO_IFNAME_SIZE 16
 #define RADIO_HAL_VERSION_SIZE 32
+#define RADIO_MACADDR_SIZE 18
 
 enum radio_state {
 	RADIO_IDLE_STATE,
@@ -75,7 +76,7 @@ typedef struct radio_generic_func {
 	int (* radio_get_feature_status) (struct radio_context *ctx, enum radio_feature);
 	int (* radio_get_supported_channels)(struct radio_context *ctx, struct radio_channel_spec *ch_list, int *no_ch);
 	int (* radio_get_operating_channel) (struct radio_context *ctx, int radio_index);
-	int (* radio_get_mac_address) (struct radio_context *ctx, int radio_index);
+	int (* radio_get_mac_address) (struct radio_context *ctx, char *mac_addr, int radio_index);
 	int (* radio_get_rssi) (struct radio_context *ctx, int radio_index);
 	int (* radio_get_txrate) (struct radio_context *ctx, int radio_index);
 	int (* radio_get_rxrate) (struct radio_context *ctx, int radio_index);
@@ -87,7 +88,7 @@ struct radio_common
 	char radio_name[RADIO_IFNAME_SIZE];
 	enum radio_type type;
 	char hal_version[RADIO_HAL_VERSION_SIZE];
-	unsigned char mac_addr[6];
+	unsigned char mac_addr[RADIO_MACADDR_SIZE];
 	struct radio_generic_func *rd_func;
 };
 
