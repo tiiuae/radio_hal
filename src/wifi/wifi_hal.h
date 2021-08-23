@@ -18,7 +18,9 @@ struct netlink_ctx {
 	char ifname[RADIO_IFNAME_SIZE];
 	struct nl_cb *if_cb;
 	struct nl_cb *link_info_cb;
+	struct nl_cb *gen_nl_cb;
 	int if_cb_err;
+	int csa_cb_err;
 	int linkinfo_cb_err;
 };
 

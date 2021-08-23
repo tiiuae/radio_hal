@@ -45,6 +45,51 @@ void mac_addr_n2a(char *mac_addr, unsigned char *arg)
         }
 }
 
+int wifi_hal_channel_to_frequency(int chan, enum nl80211_band band)
+{
+	if (chan <= 0)
+		return 0;
+
+	switch (band) {
+	case NL80211_BAND_2GHZ:
+		if (chan == 14)
+			return 2484;
+		else if (chan < 14)
+			return 2407 + chan * 5;
+		break;
+	case NL80211_BAND_5GHZ:
+		if (chan >= 182 && chan <= 196)
+			return 4000 + chan * 5;
+		else
+			return 5000 + chan * 5;
+		break;
+	case NL80211_BAND_60GHZ:
+		if (chan < 5)
+			return 56160 + chan * 2160;
+		break;
+	default:
+		;
+	}
+
+	return 0;
+}
+
+int wifi_hal_frequency_to_channel(int freq)
+{
+	if (freq == 2484)
+		return 14;
+	else if (freq < 2484)
+		return (freq - 2407) / 5;
+	else if (freq >= 4910 && freq <= 4980)
+		return (freq - 4000) / 5;
+	else if (freq <= 45000)
+		return (freq - 5000) / 5;
+	else if (freq >= 58320 && freq <= 64800)
+		return (freq - 56160) / 2160;
+	else
+		return 0;
+}
+
 static void get_mac_addr(struct wifi_sotftc *sc, char *mac_addr)
 {
 	struct ifreq if_req;
@@ -191,6 +236,70 @@ static int wifi_hal_register_nl_cb(struct wifi_sotftc *sc)
 	nl_cb_set(nl_ctx->link_info_cb, NL_CB_FINISH, NL_CB_CUSTOM, wifi_hal_nl_finish_handler, &(nl_ctx->linkinfo_cb_err));
 
 	return 0;
+}
+
+static int wifi_hal_switch_channel(struct netlink_ctx *nl_ctx, char *channel,
+				 unsigned int count)
+{
+	static const struct {
+		const char *name;
+		unsigned int val;
+	} htmap[] = {
+		{ .name = "HT20", .val = NL80211_CHAN_HT20, },
+		{ .name = "HT40+", .val = NL80211_CHAN_HT40PLUS, },
+		{ .name = "HT40-", .val = NL80211_CHAN_HT40MINUS, },
+	};
+	unsigned int htval = NL80211_CHAN_NO_HT;
+	enum nl80211_band band;
+	int i;
+	char *end;
+        int err = 0;
+        struct nl_msg* ch_sw_msg = nlmsg_alloc();
+	int chan;
+
+        if (!ch_sw_msg) {
+                printf("failed to allocate ch switch NL message.\n");
+                return -ENOMEM;
+        }
+
+        genlmsg_put(ch_sw_msg,
+                    NL_AUTO_PORT,
+                    NL_AUTO_SEQ,
+                    nl_ctx->nl80211_id,
+                    0,
+                    NLM_F_DUMP,
+                    NL80211_CMD_GET_STATION,
+                    0);
+
+	chan = strtoul(channel, &end, 10);
+	band = chan <= 14 ? NL80211_BAND_2GHZ : NL80211_BAND_5GHZ;
+	chan = wifi_hal_channel_to_frequency(chan, band);
+
+	NLA_PUT_U32(ch_sw_msg, NL80211_ATTR_WIPHY_FREQ, chan);
+	NLA_PUT_U32(ch_sw_msg, NL80211_ATTR_CH_SWITCH_COUNT, count);
+
+	for (i = 0; i < sizeof(htmap)/sizeof(htmap[0]); i++) {
+		if (strcasecmp(htmap[i].name, channel) == 0) {
+			htval = htmap[i].val;
+			break;
+		}
+	}
+
+	NLA_PUT_U32(ch_sw_msg, NL80211_ATTR_WIPHY_CHANNEL_TYPE, htval);
+
+	nl_ctx->csa_cb_err = 1;
+	err = nl_send_auto(nl_ctx->sock, ch_sw_msg);
+	while (nl_ctx->csa_cb_err > 0)
+	{
+		nl_recvmsgs(nl_ctx->sock, nl_ctx->gen_nl_cb);
+	}
+	nlmsg_free(ch_sw_msg);
+
+	return 0;
+
+nla_put_failure:
+        nlmsg_free(ch_sw_msg);
+        return err;
 }
 
 static int wifi_hal_nl80211_attach(struct wifi_sotftc *sc)
