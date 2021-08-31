@@ -39,6 +39,7 @@ radio_hal_daemon: libradio_hal.so
 
 install:
 	cp -a -f radio_hal_daemon $(INSTALL_ROOT)/usr/bin/
+	cp -a -f libradio_hal.so $(INSTALL_ROOT)/usr/lib/
 
 clean:
 	rm -f *.so *.o *.d ${ALL}
