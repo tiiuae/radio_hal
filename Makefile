@@ -8,6 +8,7 @@ INC_DIR = inc
 SRC_DIR = src
 CMN_SRC_DIR = common
 WIFI_HAL_DIR = wifi
+WPA_CTL_DIR = wpa_socket
 
 ifndef CXX
 CXX=g++
@@ -24,7 +25,7 @@ endif
 
 LDFLAGS=$(shell pkg-config --libs libnl-3.0 libnl-genl-3.0)
 
-OBJ=$(SRC_DIR)/$(CMN_SRC_DIR)/radio_hal_main.o $(SRC_DIR)/$(WIFI_HAL_DIR)/wifi_hal_main.o
+OBJ=$(SRC_DIR)/$(CMN_SRC_DIR)/radio_hal_main.o $(SRC_DIR)/$(WIFI_HAL_DIR)/wifi_hal_main.o $(SRC_DIR)/$(WIFI_HAL_DIR)/$(WPA_CTL_DIR)/wpa_ctrl.o
 
 %.o: %.cpp
 	$(CXX) -c -fPIC $(CFLAGS) ${COPTS} $< -o $@
