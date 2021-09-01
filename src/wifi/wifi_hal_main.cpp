@@ -16,10 +16,11 @@
 #include <sys/ioctl.h>
 #include <net/if.h>
 #include "wifi_frame_helper.h"
+#include "wpa_socket/wpa_ctrl.h"
 
 #define WIFI_RADIO_HAL_MAJOR_VERSION 1
 #define WIFI_RADIO_HAL_MINOR_VERSION 0
-
+#define WIFI_HAL_WPA_SOCK_PATH "/var/run/wpa_supplicant/wlan0"
 
 static int wifi_hal_nl_finish_handler(struct nl_msg *msg, void *arg)
 {
@@ -516,6 +517,25 @@ static int wifi_hal_get_mac_addr(struct radio_context *ctx, char *mac_addr, int 
 
 	get_mac_addr(sc, mac_addr);
 	return 0;
+}
+
+static int wifi_hal_wpa_attach(struct wpa_ctrl_ctx *ctx)
+{
+	ctx->ctrl = wpa_ctrl_open(WIFI_HAL_WPA_SOCK_PATH);
+	if (!ctx->ctrl)
+		printf("Couldn't open '%s'", WIFI_HAL_WPA_SOCK_PATH);
+
+	if (wpa_ctrl_attach(ctx->ctrl) < 0)
+		printf("wpa_ctrl_attach failure");
+
+	ctx->fd = wpa_ctrl_get_fd(ctx->ctrl);
+
+}
+
+static void wifi_hal_wpa_dettach(struct wpa_ctrl_ctx *ctx)
+{
+	/* To do: Check concurencies for multiple ctrl socket */
+	wpa_ctrl_close(ctx->ctrl);
 }
 
 static struct radio_generic_func wifi_hal_ops = {

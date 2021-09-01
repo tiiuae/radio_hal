@@ -24,9 +24,15 @@ struct netlink_ctx {
 	int linkinfo_cb_err;
 };
 
+struct wpa_ctrl_ctx {
+	int fd;
+	struct wpa_ctrl *ctrl;
+};
+
 struct wifi_sotftc {
 	char mac_addr[RADIO_MACADDR_SIZE];
 	struct netlink_ctx nl_ctx;
+	struct wpa_ctrl_ctx wpa_ctx;
 	int signal;
 	int txrate;
 	int rxrate;
