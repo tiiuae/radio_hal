@@ -519,11 +519,32 @@ static int wifi_hal_get_mac_addr(struct radio_context *ctx, char *mac_addr, int 
 	return 0;
 }
 
+int wifi_hal_send_wpa_command(struct wpa_ctrl_ctx *ctx, int index, const char *cmd, char *resp, size_t *resp_size)
+{
+	int ret;
+
+	if (!ctx->ctrl)
+		printf("ctrl socket not connected '%s' and cmd drooped:%s\n", WIFI_HAL_WPA_SOCK_PATH, cmd);
+
+	ret = wpa_ctrl_request(ctx->ctrl, cmd, strlen(cmd), resp, resp_size, NULL);
+	if (ret == -2) {
+		printf("'%s' command timed out.\n", cmd);
+		return -2;
+	} else if (ret < 0 || strncmp(resp, "FAIL", 4) == 0) {
+		return -1;
+	}
+	if (strncmp(cmd, "PING", 4) == 0) {
+		resp[*resp_size] = '\0';
+	}
+
+	return 0;
+}
+
 static int wifi_hal_wpa_attach(struct wpa_ctrl_ctx *ctx)
 {
 	ctx->ctrl = wpa_ctrl_open(WIFI_HAL_WPA_SOCK_PATH);
 	if (!ctx->ctrl)
-		printf("Couldn't open '%s'", WIFI_HAL_WPA_SOCK_PATH);
+		printf("Couldn't open '%s'\n", WIFI_HAL_WPA_SOCK_PATH);
 
 	if (wpa_ctrl_attach(ctx->ctrl) < 0)
 		printf("wpa_ctrl_attach failure");
