@@ -543,19 +543,33 @@ int wifi_hal_send_wpa_command(struct wpa_ctrl_ctx *ctx, int index, const char *c
 static int wifi_hal_wpa_attach(struct wpa_ctrl_ctx *ctx)
 {
 	ctx->ctrl = wpa_ctrl_open(WIFI_HAL_WPA_SOCK_PATH);
-	if (!ctx->ctrl)
+	if (!ctx->ctrl) {
 		printf("Couldn't open '%s'\n", WIFI_HAL_WPA_SOCK_PATH);
-
-	if (wpa_ctrl_attach(ctx->ctrl) < 0)
-		printf("wpa_ctrl_attach failure");
+		return -1;
+	}
 
 	ctx->fd = wpa_ctrl_get_fd(ctx->ctrl);
 
+	ctx->monitor = wpa_ctrl_open(WIFI_HAL_WPA_SOCK_PATH);
+	if (!ctx->monitor) {
+		printf("Couldn't open '%s'\n", WIFI_HAL_WPA_SOCK_PATH);
+		wpa_ctrl_close(ctx->ctrl);
+		return -1;
+	}
+
+	if (wpa_ctrl_attach(ctx->monitor) < 0) {
+		printf("wpa_ctrl monitor attach failed");
+		wpa_ctrl_close(ctx->monitor);
+		wpa_ctrl_close(ctx->ctrl);
+		return -1;
+	}
+
+	return 0;
 }
 
 static void wifi_hal_wpa_dettach(struct wpa_ctrl_ctx *ctx)
 {
-	/* To do: Check concurencies for multiple ctrl socket */
+	wpa_ctrl_close(ctx->monitor);
 	wpa_ctrl_close(ctx->ctrl);
 }
 
