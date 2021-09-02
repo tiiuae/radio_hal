@@ -27,6 +27,7 @@ struct netlink_ctx {
 struct wpa_ctrl_ctx {
 	int fd;
 	struct wpa_ctrl *ctrl;
+	struct wpa_ctrl *monitor;
 };
 
 struct wifi_sotftc {

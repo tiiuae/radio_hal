@@ -7,6 +7,8 @@
  */
 
 #include "includes.h"
+#define CONFIG_CTRL_IFACE_UNIX
+#define CONFIG_CTRL_IFACE
 
 #ifdef CONFIG_CTRL_IFACE
 
