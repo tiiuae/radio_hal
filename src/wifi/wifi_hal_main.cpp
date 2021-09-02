@@ -519,7 +519,7 @@ static int wifi_hal_get_mac_addr(struct radio_context *ctx, char *mac_addr, int 
 	return 0;
 }
 
-int wifi_hal_send_wpa_command(struct wpa_ctrl_ctx *ctx, int index, const char *cmd, char *resp, size_t *resp_size)
+static int wifi_hal_send_wpa_command(struct wpa_ctrl_ctx *ctx, int index, const char *cmd, char *resp, size_t *resp_size)
 {
 	int ret;
 
@@ -538,6 +538,84 @@ int wifi_hal_send_wpa_command(struct wpa_ctrl_ctx *ctx, int index, const char *c
 	}
 
 	return 0;
+}
+
+static int wifi_hal_ctrl_recv(struct wpa_ctrl_ctx *ctx, int index, char *reply, size_t *reply_len)
+{
+	int res;
+	struct pollfd fds[2];
+	int wpa_fd;
+
+	if (!ctx->ctrl) {
+		printf("ctrl socket noy opened '%s'\n", WIFI_HAL_WPA_SOCK_PATH);
+		return -1;
+	}
+
+	wpa_fd = wpa_ctrl_get_fd(ctx->ctrl);
+	memset(fds, 0, 2 * sizeof(struct pollfd));
+	fds[0].fd = STDIN_FILENO;
+	fds[0].events |= POLLIN;
+	fds[0].revents = 0;
+	fds[1].fd = wpa_fd;
+	fds[1].events |= POLLIN;
+	fds[1].revents = 0;
+	res = poll(fds, 2, -1);
+	if (res < 0) {
+		printf("poll failed = %d", res);
+		return res;
+	}
+
+	if (fds[0].revents & POLLIN) {
+		return wpa_ctrl_recv(ctx->monitor, reply, reply_len);
+	} else {
+		printf("socket terminated already!");
+		return -1;
+	}
+
+	return 0;
+}
+
+static int wifi_hal_wait_on_event(struct wpa_ctrl_ctx *ctx, int index, char *buf, size_t buflen)
+{
+	size_t nread = buflen - 1;
+	int result;
+
+	if (!ctx->monitor)
+	{
+		printf("monitor Connection not opened\n");
+		strncpy(buf, WPA_EVENT_TERMINATING " - connection closed", buflen-1);
+		buf[buflen-1] = '\0';
+		return strlen(buf);
+	}
+
+	/* To DO: Pass valid index during concurency */
+	result = wifi_hal_ctrl_recv(ctx, 0, buf, &nread);
+	if (result < 0) {
+		printf("wifi_ctrl_recv failed: %s\n", strerror(errno));
+		strncpy(buf, WPA_EVENT_TERMINATING " - recv error", buflen-1);
+		buf[buflen-1] = '\0';
+		return strlen(buf);
+	}
+
+	buf[nread] = '\0';
+	printf("WiFi HAL: wait_for_event: result=%d nread=%d string=\"%s\"\n", result, nread, buf);
+	/* Check for EOF on the socket */
+	if (result == 0 && nread == 0) {
+		printf("got EOF on monitor socket\n");
+		strncpy(buf, WPA_EVENT_TERMINATING " - signal 0 received", buflen-1);
+		buf[buflen-1] = '\0';
+		return strlen(buf);
+	}
+	/* strip verbose info from event */
+	if (buf[0] == '<') {
+	char *match = strchr(buf, '>');
+		if (match != NULL) {
+		nread -= (match+1-buf);
+		memmove(buf, match+1, nread+1);
+		}
+	}
+
+	return nread;
 }
 
 static int wifi_hal_wpa_attach(struct wpa_ctrl_ctx *ctx)
