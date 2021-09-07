@@ -20,7 +20,9 @@
 
 #define WIFI_RADIO_HAL_MAJOR_VERSION 1
 #define WIFI_RADIO_HAL_MINOR_VERSION 0
-#define WIFI_HAL_WPA_SOCK_PATH "/var/run/wpa_supplicant/wlan0"
+#define WIFI_HAL_WPA_SOCK_PATH "/var/run/wpa_supplicant/"
+static const char *client_socket_dir = NULL;
+static int debug;
 
 static int wifi_hal_nl_finish_handler(struct nl_msg *msg, void *arg)
 {
@@ -459,16 +461,7 @@ int wifi_hal_get_iface_name(struct radio_context *ctx, char *name, int radio_ind
 	return 0;
 }
 
-/* To Do: Check connection state */
-static int wifi_hal_get_rssi (struct radio_context *ctx, int radio_index)
-{
-	struct wifi_sotftc *sc = (struct wifi_sotftc *)ctx->radio_private;
 
-	wifi_hal_get_interface(&sc->nl_ctx);
-	wifi_hal_get_stainfo(&sc->nl_ctx);
-
-	return sc->signal;
-}
 
 static int wifi_hal_get_txrate (struct radio_context *ctx, int radio_index)
 {
@@ -490,13 +483,65 @@ static int wifi_hal_get_rxrate (struct radio_context *ctx, int radio_index)
 	return sc->rxrate;
 }
 
+static int wifi_hal_wpa_attach(struct wifi_sotftc *sc)
+{
+	struct wpa_ctrl_ctx *ctx = &sc->wpa_ctx;
+	char sock_path[64] = {0};
+	int len = 0;
+
+	len += sprintf(sock_path, WIFI_HAL_WPA_SOCK_PATH);
+	len += sprintf(sock_path + len, (const char *)(sc->nl_ctx.ifname));
+	ctx->ctrl = wpa_ctrl_open2(sock_path, client_socket_dir);
+	if (!ctx->ctrl) {
+		printf("Couldn't open '%s'\n", sock_path);
+		return -1;
+	}
+	ctx->fd = wpa_ctrl_get_fd(ctx->ctrl);
+
+	ctx->monitor = wpa_ctrl_open2(sock_path, client_socket_dir);
+	if (!ctx->monitor) {
+		printf("Couldn't open '%s'\n", sock_path);
+		wpa_ctrl_close(ctx->ctrl);
+		return -1;
+	}
+
+	if (wpa_ctrl_attach(ctx->monitor) < 0) {
+		printf("wpa_ctrl monitor attach failed");
+		wpa_ctrl_close(ctx->monitor);
+		wpa_ctrl_close(ctx->ctrl);
+		return -1;
+	}
+
+
+	return 0;
+}
+
+static void wifi_hal_wpa_dettach(struct wifi_sotftc *sc)
+{
+	struct wpa_ctrl_ctx *ctx = &sc->wpa_ctx;
+
+	wpa_ctrl_close(ctx->monitor);
+	wpa_ctrl_close(ctx->ctrl);
+}
+
 static int wifi_hal_open(struct radio_context *ctx, enum radio_type type)
 {
 	struct wifi_sotftc *sc = (struct wifi_sotftc *)ctx->radio_private;
 	int err;
 
 	err = wifi_hal_get_interface(&sc->nl_ctx);
+	if (err) {
+		printf("failed to get interface \n");
+		return err;
+	}
+
 	printf("wifi interface: %s , interface index = %d\n", sc->nl_ctx.ifname, sc->nl_ctx.ifindex);
+
+	err = wifi_hal_wpa_attach(sc);
+	if (err) {
+		printf("wpa_attach failed \n");
+		return err;
+	}
 
 	return 0;
 }
@@ -504,6 +549,8 @@ static int wifi_hal_open(struct radio_context *ctx, enum radio_type type)
 static int wifi_hal_close(struct radio_context *ctx, enum radio_type type)
 {
 	struct wifi_sotftc *sc = (struct wifi_sotftc *)ctx->radio_private;
+
+	wifi_hal_wpa_dettach(sc);
 
 	memset(sc->nl_ctx.ifname, 0,  RADIO_IFNAME_SIZE);
 	sc->nl_ctx.ifindex = 0;
@@ -523,8 +570,10 @@ static int wifi_hal_send_wpa_command(struct wpa_ctrl_ctx *ctx, int index, const 
 {
 	int ret;
 
-	if (!ctx->ctrl)
+	if (!ctx->ctrl) {
 		printf("ctrl socket not connected '%s' and cmd drooped:%s\n", WIFI_HAL_WPA_SOCK_PATH, cmd);
+		return -1;
+	}
 
 	ret = wpa_ctrl_request(ctx->ctrl, cmd, strlen(cmd), resp, resp_size, NULL);
 	if (ret == -2) {
@@ -533,9 +582,13 @@ static int wifi_hal_send_wpa_command(struct wpa_ctrl_ctx *ctx, int index, const 
 	} else if (ret < 0 || strncmp(resp, "FAIL", 4) == 0) {
 		return -1;
 	}
-	if (strncmp(cmd, "PING", 4) == 0) {
-		resp[*resp_size] = '\0';
-	}
+
+        if (debug) {
+                resp[*resp_size] = '\0';
+                printf("%s", resp);
+                if (*resp_size > 0 && resp[*resp_size - 1] != '\n')
+                        printf("\n");
+        }
 
 	return 0;
 }
@@ -618,37 +671,15 @@ static int wifi_hal_wait_on_event(struct wpa_ctrl_ctx *ctx, int index, char *buf
 	return nread;
 }
 
-static int wifi_hal_wpa_attach(struct wpa_ctrl_ctx *ctx)
+
+/* To Do: Check connection state */
+static int wifi_hal_get_rssi (struct radio_context *ctx, int radio_index)
 {
-	ctx->ctrl = wpa_ctrl_open(WIFI_HAL_WPA_SOCK_PATH);
-	if (!ctx->ctrl) {
-		printf("Couldn't open '%s'\n", WIFI_HAL_WPA_SOCK_PATH);
-		return -1;
-	}
+	struct wifi_sotftc *sc = (struct wifi_sotftc *)ctx->radio_private;
+	wifi_hal_get_interface(&sc->nl_ctx);
+	wifi_hal_get_stainfo(&sc->nl_ctx);
 
-	ctx->fd = wpa_ctrl_get_fd(ctx->ctrl);
-
-	ctx->monitor = wpa_ctrl_open(WIFI_HAL_WPA_SOCK_PATH);
-	if (!ctx->monitor) {
-		printf("Couldn't open '%s'\n", WIFI_HAL_WPA_SOCK_PATH);
-		wpa_ctrl_close(ctx->ctrl);
-		return -1;
-	}
-
-	if (wpa_ctrl_attach(ctx->monitor) < 0) {
-		printf("wpa_ctrl monitor attach failed");
-		wpa_ctrl_close(ctx->monitor);
-		wpa_ctrl_close(ctx->ctrl);
-		return -1;
-	}
-
-	return 0;
-}
-
-static void wifi_hal_wpa_dettach(struct wpa_ctrl_ctx *ctx)
-{
-	wpa_ctrl_close(ctx->monitor);
-	wpa_ctrl_close(ctx->ctrl);
+	return sc->signal;
 }
 
 static struct radio_generic_func wifi_hal_ops = {
