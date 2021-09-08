@@ -80,7 +80,7 @@ typedef struct radio_generic_func {
 	int (* radio_get_rssi) (struct radio_context *ctx, int radio_index);
 	int (* radio_get_txrate) (struct radio_context *ctx, int radio_index);
 	int (* radio_get_rxrate) (struct radio_context *ctx, int radio_index);
-
+	int (* radio_get_scan_results)(struct radio_context *ctx, char *results);
 } radio_gen_func_t;
 
 struct radio_common

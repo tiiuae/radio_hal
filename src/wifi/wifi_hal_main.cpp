@@ -593,6 +593,34 @@ static int wifi_hal_send_wpa_command(struct wpa_ctrl_ctx *ctx, int index, const 
 	return 0;
 }
 
+static int wifi_hal_trigger_scan(struct wifi_sotftc *sc)
+{
+        char buf[2048];
+        size_t len = 0;
+
+	len = sizeof(buf) - 1;
+        wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, "SCAN", buf, &len);
+        if (len)
+                printf("SCAN TRIGGER:%s\n", buf);
+
+	return 0;
+}
+
+static int wifi_hal_get_scan_results(struct radio_context *ctx, char *results)
+{
+        struct wifi_sotftc *sc = (struct wifi_sotftc *)ctx->radio_private;
+        char buf[2048];
+        size_t len = 0;
+
+	len = sizeof(buf) - 1;
+	wifi_hal_trigger_scan(sc);
+        wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, "SCAN_RESULTS", buf, &len);
+        if (len)
+                printf("SCAN RESULTS:%s\n", buf);
+
+	return 0;
+}
+
 static int wifi_hal_ctrl_recv(struct wpa_ctrl_ctx *ctx, int index, char *reply, size_t *reply_len)
 {
 	int res;
@@ -676,6 +704,7 @@ static int wifi_hal_wait_on_event(struct wpa_ctrl_ctx *ctx, int index, char *buf
 static int wifi_hal_get_rssi (struct radio_context *ctx, int radio_index)
 {
 	struct wifi_sotftc *sc = (struct wifi_sotftc *)ctx->radio_private;
+
 	wifi_hal_get_interface(&sc->nl_ctx);
 	wifi_hal_get_stainfo(&sc->nl_ctx);
 
@@ -703,6 +732,7 @@ static struct radio_generic_func wifi_hal_ops = {
 	.radio_get_rssi = wifi_hal_get_rssi,
 	.radio_get_txrate = wifi_hal_get_txrate,
 	.radio_get_rxrate = wifi_hal_get_rxrate,
+	.radio_get_scan_results = wifi_hal_get_scan_results,
 };
 
 int wifi_hal_register_ops(struct radio_context *ctx)
