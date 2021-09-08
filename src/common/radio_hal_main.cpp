@@ -51,6 +51,7 @@ static int test_radio_hal_api(struct radio_context *ctx, char *cmd,
 	char version[32] = {0};
 	char ifname[RADIO_IFNAME_SIZE] = {0};
 	char mac_addr[RADIO_MACADDR_SIZE] = {0};
+	char scan_results[1024] = {0};
 	struct radio_generic_func *radio_ops = ctx->cmn.rd_func;
 
 	switch(type)
@@ -78,6 +79,10 @@ static int test_radio_hal_api(struct radio_context *ctx, char *cmd,
 				radio_ops->open(ctx, RADIO_WIFI);
 				radio_ops->radio_get_mac_address(ctx, mac_addr, 1);
 				printf("MACADDR:%s \n", mac_addr);
+			} else if(!strcmp(cmd, "radio_hal_get_scan_result")) {
+				radio_ops->open(ctx, RADIO_WIFI);
+				radio_ops->radio_get_scan_results(ctx, scan_results);
+				printf("%s\n", scan_results);
 			}
 			break;
 		case RADIO_BT:

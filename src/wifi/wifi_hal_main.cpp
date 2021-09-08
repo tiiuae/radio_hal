@@ -615,8 +615,10 @@ static int wifi_hal_get_scan_results(struct radio_context *ctx, char *results)
 	len = sizeof(buf) - 1;
 	wifi_hal_trigger_scan(sc);
         wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, "SCAN_RESULTS", buf, &len);
-        if (len)
+        if (len && debug)
                 printf("SCAN RESULTS:%s\n", buf);
+
+	memcpy(results, buf, len);
 
 	return 0;
 }
