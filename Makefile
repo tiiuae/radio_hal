@@ -8,6 +8,7 @@ INC_DIR = inc
 SRC_DIR = src
 CMN_SRC_DIR = common
 WIFI_HAL_DIR = wifi
+WPA_CTL_DIR = wpa_socket
 
 ifndef CXX
 CXX=g++
@@ -18,16 +19,16 @@ CXXSTD=c++14
 endif
 
 ifndef CFLAGS
-CFLAGS = -MMD -O2 -Wall -g -I$(INC_DIR) -I$(SRC_DIR)/$(WIFI_HAL_DIR) -I/usr/include/libnl3/
+CFLAGS = -MMD -O2 -Wall -g -fPIC -I$(INC_DIR) -I$(SRC_DIR)/$(WIFI_HAL_DIR) -I$(SRC_DIR)/$(WIFI_HAL_DIR)/$(WPA_CTL_DIR)/ -I/usr/include/libnl3/
 CFLAGS += -std=${CXXSTD}
 endif
 
 LDFLAGS=$(shell pkg-config --libs libnl-3.0 libnl-genl-3.0)
 
-OBJ=$(SRC_DIR)/$(CMN_SRC_DIR)/radio_hal_main.o $(SRC_DIR)/$(WIFI_HAL_DIR)/wifi_hal_main.o
+OBJ=$(SRC_DIR)/$(CMN_SRC_DIR)/radio_hal_main.o $(SRC_DIR)/$(WIFI_HAL_DIR)/$(WPA_CTL_DIR)/os_unix.o $(SRC_DIR)/$(WIFI_HAL_DIR)/$(WPA_CTL_DIR)/wpa_ctrl.o $(SRC_DIR)/$(WIFI_HAL_DIR)/wifi_hal_main.o
 
 %.o: %.cpp
-	$(CXX) -c -fPIC $(CFLAGS) ${COPTS} $< -o $@
+	$(CXX) -c -fPIC  $(CFLAGS) ${COPTS} $< -o $@
 	echo " CXX " $<
 
 libradio_hal.so: $(OBJ)
