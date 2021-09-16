@@ -807,6 +807,7 @@ static struct radio_generic_func wifi_hal_ops = {
 	.radio_get_txrate = wifi_hal_get_txrate,
 	.radio_get_rxrate = wifi_hal_get_rxrate,
 	.radio_get_scan_results = wifi_hal_get_scan_results,
+	.radio_connect_ap = wifi_hal_connect_ap,
 };
 
 int wifi_hal_register_ops(struct radio_context *ctx)
