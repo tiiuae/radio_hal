@@ -28,6 +28,7 @@ struct wpa_ctrl_ctx {
 	int fd;
 	struct wpa_ctrl *ctrl;
 	struct wpa_ctrl *monitor;
+	struct wpa_ctrl *mesh_ctrl;
 };
 
 struct wifi_sotftc {
