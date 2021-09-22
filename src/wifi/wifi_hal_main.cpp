@@ -1058,7 +1058,6 @@ static int wifi_hal_get_rssi (struct radio_context *ctx, int radio_index)
 
 	wifi_hal_get_interface(&sc->nl_ctx);
 	wifi_hal_get_stainfo(&sc->nl_ctx);
-	wifi_hal_join_mesh(ctx, "\"my_mesh\"", "\"ssrc@1233\"", "2412");
 
 	return sc->signal;
 }
