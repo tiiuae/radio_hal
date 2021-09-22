@@ -131,7 +131,7 @@ int wifi_hal_frequency_to_channel(int freq)
 		return 0;
 }
 
-static void get_mac_addr(struct wifi_sotftc *sc, char *mac_addr)
+static void get_mac_addr(struct wifi_softc *sc, char *mac_addr)
 {
 	struct ifreq if_req;
 	int fd = socket(AF_INET, SOCK_DGRAM, 0);
@@ -148,7 +148,7 @@ static void get_mac_addr(struct wifi_sotftc *sc, char *mac_addr)
 
 static int wifi_hal_ifname_resp_hdlr(struct nl_msg *msg, void *arg)
 {
-	struct wifi_sotftc *sc = (struct wifi_sotftc *)arg;
+	struct wifi_softc *sc = (struct wifi_softc *)arg;
 	struct netlink_ctx *nl_ctx = &sc->nl_ctx;
 	struct genlmsghdr *hdr = (struct genlmsghdr *)nlmsg_data(nlmsg_hdr(msg));
 	struct nlattr *tb_msg[NL80211_ATTR_MAX + 1];
@@ -173,7 +173,7 @@ static int wifi_hal_ifname_resp_hdlr(struct nl_msg *msg, void *arg)
 
 static int wifi_hal_connection_info_hdlr(struct nl_msg *msg, void *arg)
 {
-	struct wifi_sotftc *sc = (struct wifi_sotftc *)arg;
+	struct wifi_softc *sc = (struct wifi_softc *)arg;
 	struct netlink_ctx *nl_ctx = &sc->nl_ctx;
 	struct nlattr *tb_msg[NL80211_ATTR_MAX + 1];
 	struct genlmsghdr *hdr = (struct genlmsghdr *)nlmsg_data(nlmsg_hdr(msg));
@@ -253,7 +253,7 @@ static int wifi_hal_connection_info_hdlr(struct nl_msg *msg, void *arg)
 	return NL_SKIP;
 }
 
-static int wifi_hal_register_nl_cb(struct wifi_sotftc *sc)
+static int wifi_hal_register_nl_cb(struct wifi_softc *sc)
 {
 	struct netlink_ctx *nl_ctx = &sc->nl_ctx;
 
@@ -343,7 +343,7 @@ nla_put_failure:
         return err;
 }
 
-static int wifi_hal_nl80211_attach(struct wifi_sotftc *sc)
+static int wifi_hal_nl80211_attach(struct wifi_softc *sc)
 {
 	struct netlink_ctx *nl_ctx = &sc->nl_ctx;
 	struct nl_sock *sock;
@@ -376,7 +376,7 @@ out:
 	return err;
 }
 
-static void wifi_hal_nl80211_dettach(struct wifi_sotftc *sc)
+static void wifi_hal_nl80211_dettach(struct wifi_softc *sc)
 {
 	struct netlink_ctx *nl_ctx = &sc->nl_ctx;
 	nl_socket_free(nl_ctx->sock);
@@ -492,7 +492,7 @@ static int wifi_hal_get_hal_version(char *version)
 
 int wifi_hal_get_iface_name(struct radio_context *ctx, char *name, int radio_index)
 {
-	struct wifi_sotftc *sc = (struct wifi_sotftc *)ctx->radio_private;
+	struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
 
 	memcpy(name, sc->nl_ctx.ifname, RADIO_IFNAME_SIZE);
 
@@ -503,7 +503,7 @@ int wifi_hal_get_iface_name(struct radio_context *ctx, char *name, int radio_ind
 
 static int wifi_hal_get_txrate (struct radio_context *ctx, int radio_index)
 {
-	struct wifi_sotftc *sc = (struct wifi_sotftc *)ctx->radio_private;
+	struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
 	
 	wifi_hal_get_interface(&sc->nl_ctx);
 	wifi_hal_get_stainfo(&sc->nl_ctx);
@@ -513,7 +513,7 @@ static int wifi_hal_get_txrate (struct radio_context *ctx, int radio_index)
 
 static int wifi_hal_get_rxrate (struct radio_context *ctx, int radio_index)
 {
-	struct wifi_sotftc *sc = (struct wifi_sotftc *)ctx->radio_private;
+	struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
 	
 	wifi_hal_get_interface(&sc->nl_ctx);
 	wifi_hal_get_stainfo(&sc->nl_ctx);
@@ -521,7 +521,7 @@ static int wifi_hal_get_rxrate (struct radio_context *ctx, int radio_index)
 	return sc->rxrate;
 }
 
-static int wifi_hal_wpa_mesh_attach(struct wifi_sotftc *sc)
+static int wifi_hal_wpa_mesh_attach(struct wifi_softc *sc)
 {
 	struct wpa_ctrl_ctx *ctx = &sc->wpa_ctx;
 	char sock_path[64] = {0};
@@ -539,7 +539,7 @@ static int wifi_hal_wpa_mesh_attach(struct wifi_sotftc *sc)
 	return 0;
 }
 
-static int wifi_hal_wpa_attach(struct wifi_sotftc *sc)
+static int wifi_hal_wpa_attach(struct wifi_softc *sc)
 {
 	struct wpa_ctrl_ctx *ctx = &sc->wpa_ctx;
 	char sock_path[64] = {0};
@@ -572,7 +572,7 @@ static int wifi_hal_wpa_attach(struct wifi_sotftc *sc)
 	return 0;
 }
 
-static void wifi_hal_wpa_dettach(struct wifi_sotftc *sc)
+static void wifi_hal_wpa_dettach(struct wifi_softc *sc)
 {
 	struct wpa_ctrl_ctx *ctx = &sc->wpa_ctx;
 
@@ -582,7 +582,7 @@ static void wifi_hal_wpa_dettach(struct wifi_sotftc *sc)
 
 static int wifi_hal_open(struct radio_context *ctx, enum radio_type type)
 {
-	struct wifi_sotftc *sc = (struct wifi_sotftc *)ctx->radio_private;
+	struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
 	int err;
 
 	err = wifi_hal_get_interface(&sc->nl_ctx);
@@ -604,7 +604,7 @@ static int wifi_hal_open(struct radio_context *ctx, enum radio_type type)
 
 static int wifi_hal_close(struct radio_context *ctx, enum radio_type type)
 {
-	struct wifi_sotftc *sc = (struct wifi_sotftc *)ctx->radio_private;
+	struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
 
 	wifi_hal_wpa_dettach(sc);
 
@@ -616,7 +616,7 @@ static int wifi_hal_close(struct radio_context *ctx, enum radio_type type)
 
 static int wifi_hal_get_mac_addr(struct radio_context *ctx, char *mac_addr, int radio_index)
 {
-	struct wifi_sotftc *sc = (struct wifi_sotftc *)ctx->radio_private;
+	struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
 
 	get_mac_addr(sc, mac_addr);
 	return 0;
@@ -676,7 +676,7 @@ static int wifi_hal_send_wpa_mesh_command(struct wpa_ctrl_ctx *ctx, int index, c
 	return 0;
 }
 
-static int wifi_hal_trigger_scan(struct wifi_sotftc *sc)
+static int wifi_hal_trigger_scan(struct wifi_softc *sc)
 {
         char buf[2048];
         size_t len = 0;
@@ -691,7 +691,7 @@ static int wifi_hal_trigger_scan(struct wifi_sotftc *sc)
 
 static int wifi_hal_get_scan_results(struct radio_context *ctx, char *results)
 {
-        struct wifi_sotftc *sc = (struct wifi_sotftc *)ctx->radio_private;
+        struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
         char buf[2048];
         size_t len = 0;
 
@@ -708,7 +708,7 @@ static int wifi_hal_get_scan_results(struct radio_context *ctx, char *results)
 
 static int wifi_hal_connect_ap(struct radio_context *ctx, char *ssid, char *psk)
 {
-	struct wifi_sotftc *sc = (struct wifi_sotftc *)ctx->radio_private;
+	struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
         char cmd_buf[2048] = {0};
         char resp_buf[2048] = {0};
 	char nw_id[6] = {0};
@@ -778,7 +778,7 @@ static int wifi_hal_connect_ap(struct radio_context *ctx, char *ssid, char *psk)
 	return 0;
 }
 
-static int wifi_hal_get_phyname(struct wifi_sotftc *sc, char *cmd, char *resp_buf, int resp_size)
+static int wifi_hal_get_phyname(struct wifi_softc *sc, char *cmd, char *resp_buf, int resp_size)
 {
 	int ret;
 
@@ -794,7 +794,7 @@ static int wifi_hal_get_phyname(struct wifi_sotftc *sc, char *cmd, char *resp_bu
 
 static int wifi_hal_join_mesh(struct radio_context *ctx, char *ssid, char *psk, char *freq)
 {
-	struct wifi_sotftc *sc = (struct wifi_sotftc *)ctx->radio_private;
+	struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
         char cmd_buf[2048] = {0};
         char resp_buf[2048] = {0};
 	char nw_id[6] = {0};
@@ -1054,7 +1054,7 @@ static int wifi_hal_wait_on_event(struct wpa_ctrl_ctx *ctx, int index, char *buf
 /* To Do: Check connection state */
 static int wifi_hal_get_rssi (struct radio_context *ctx, int radio_index)
 {
-	struct wifi_sotftc *sc = (struct wifi_sotftc *)ctx->radio_private;
+	struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
 
 	wifi_hal_get_interface(&sc->nl_ctx);
 	wifi_hal_get_stainfo(&sc->nl_ctx);
@@ -1098,7 +1098,7 @@ int wifi_hal_register_ops(struct radio_context *ctx)
 struct radio_context*  wifi_hal_attach()
 {
 	struct radio_context *ctx = NULL;
-	struct wifi_sotftc *sc = NULL;
+	struct wifi_softc *sc = NULL;
 	int err = 0;
 
 	ctx = (struct radio_context *)malloc(sizeof(struct radio_context));
@@ -1106,7 +1106,7 @@ struct radio_context*  wifi_hal_attach()
 		printf("failed to allocate radio hal ctx\n");
 		return NULL;
 	}
-	sc = (struct wifi_sotftc *)malloc(sizeof(struct wifi_sotftc));
+	sc = (struct wifi_softc *)malloc(sizeof(struct wifi_softc));
 	if (!sc) {
 		printf("failed to allocate wifi softc ctx\n");
 		err =  -ENOMEM;
@@ -1141,7 +1141,7 @@ sc_alloc_failure:
 
 int wifi_hal_dettach(struct radio_context *ctx)
 {
-	struct wifi_sotftc *sc = (struct wifi_sotftc *)ctx->radio_private;
+	struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
 	int err = 0;
 
 	wifi_hal_nl80211_dettach(sc);
