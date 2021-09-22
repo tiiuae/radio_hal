@@ -22,7 +22,7 @@
 #define WIFI_RADIO_HAL_MINOR_VERSION 0
 #define WIFI_HAL_WPA_SOCK_PATH "/var/run/wpa_supplicant/"
 static const char *client_socket_dir = NULL;
-static int debug = 1;
+static int debug;
 
 static int wifi_hal_nl_finish_handler(struct nl_msg *msg, void *arg)
 {
@@ -32,7 +32,7 @@ static int wifi_hal_nl_finish_handler(struct nl_msg *msg, void *arg)
 	return NL_SKIP;
 }
 
-void mac_addr_n2a(char *mac_addr, unsigned char *arg)
+void wifi_hal_mac_addr_n2a(char *mac_addr, unsigned char *arg)
 {
         int i, l;
 
@@ -48,7 +48,7 @@ void mac_addr_n2a(char *mac_addr, unsigned char *arg)
         }
 }
 
-int run_sys_cmd(char *cmd, char *resp_buf, int resp_size)
+int wifi_hal_run_sys_cmd(char *cmd, char *resp_buf, int resp_size)
 {
     FILE *f;
     char *buf = resp_buf;
@@ -76,7 +76,6 @@ int run_sys_cmd(char *cmd, char *resp_buf, int resp_size)
         size-=readbytes;
         buf += readbytes;
     }
-
     pclose(f);
     resp_buf[resp_size-1]=0;
 
@@ -142,8 +141,8 @@ static void get_mac_addr(struct wifi_softc *sc, char *mac_addr)
 	ioctl(fd, SIOCGIFHWADDR, &if_req);
 	close(fd);
 	mac = (unsigned char*)if_req.ifr_hwaddr.sa_data;
-	mac_addr_n2a(sc->mac_addr, mac);
-	mac_addr_n2a(mac_addr, mac);
+	wifi_hal_mac_addr_n2a(sc->mac_addr, mac);
+	wifi_hal_mac_addr_n2a(mac_addr, mac);
 }
 
 static int wifi_hal_ifname_resp_hdlr(struct nl_msg *msg, void *arg)
@@ -783,7 +782,7 @@ static int wifi_hal_get_phyname(struct wifi_softc *sc, char *cmd, char *resp_buf
 	int ret;
 
         sprintf(cmd, "echo $(iw dev %s info | awk '/wiphy/ {printf \"phy\" $2}')", sc->nl_ctx.ifname);
-        ret = run_sys_cmd(cmd, resp_buf, resp_size);
+        ret = wifi_hal_run_sys_cmd(cmd, resp_buf, resp_size);
         if (ret) {
                 printf("failed to kill supplicant\n");
                 return -1;
@@ -803,21 +802,6 @@ static int wifi_hal_join_mesh(struct radio_context *ctx, char *ssid, char *psk, 
 
 	/* To do: Back up  AP config and Add support for SAP + MESH later */
 
-#if 0
-	len = sizeof(cmd_buf) - 1;
-	strcpy(cmd_buf, "MESH_INTERFACE_ADD ifname=mesh0");
-
-        ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
-        if (ret < 0) {
-		printf("failed to add mesh0 if\n");
-		return ret;
-	}
-
-	if (!strncmp(resp_buf, "mesh0", 5) == 0)
-		return -1;
-#else
-
-#endif
 	/* restart wpa_supplicant on mesh interface */
 	memset(cmd_buf, 0, 2048);
 	sprintf(cmd_buf, "killall wpa_supplicant");
@@ -831,9 +815,9 @@ static int wifi_hal_join_mesh(struct radio_context *ctx, char *ssid, char *psk, 
 		memset(cmd_buf, 0, 2048);
 		sprintf(cmd_buf, "iw dev %s del", sc->nl_ctx.ifname);
 		len = sizeof(cmd_buf) - 1;
-		ret = run_sys_cmd(cmd_buf, resp_buf, len);
+		ret = wifi_hal_run_sys_cmd(cmd_buf, resp_buf, len);
 		if (ret) {
-			printf("failed to kill supplicant\n");
+			printf("failed to delete default managed interface\n");
 			return -1;
 		}
 	}
@@ -842,18 +826,21 @@ static int wifi_hal_join_mesh(struct radio_context *ctx, char *ssid, char *psk, 
 	wifi_hal_get_phyname(sc, cmd_buf, resp_buf, len);
 	if (!(strncmp(sc->nl_ctx.ifname, "mesh0", 5) == 0)) {
 		memset(cmd_buf, 0, 2048);
-		sprintf(cmd_buf, "iw phy phy1 interface add mesh0 type mp");
+		/* To Do: fix phyname with resp buffer(TBD) */
+		sprintf(cmd_buf, "iw phy phy0 interface add mesh0 type mp");
 		len = sizeof(cmd_buf) - 1;
-		ret = run_sys_cmd(cmd_buf, resp_buf, len);
+		ret = wifi_hal_run_sys_cmd(cmd_buf, resp_buf, len);
 		if (ret) {
 			printf("failed to add mesh0 if\n");
 			return -1;
 		}
-#if 0
+
+#ifdef CONFIG_PROVISON_MACADDR
+		/* To Do: Check if we need to provison later with SAP + STA */
 		memset(cmd_buf, 0, 2048);
 		sprintf(cmd_buf, "ifconfig mesh0 hw ether 00:11:22:33:44:55");
 		len = sizeof(cmd_buf) - 1;
-		ret = run_sys_cmd(cmd_buf, resp_buf, len);
+		ret = wifi_hal_run_sys_cmd(cmd_buf, resp_buf, len);
 		if (ret) {
 			printf("failed to set mac addr\n");
 			return -1;
@@ -862,7 +849,7 @@ static int wifi_hal_join_mesh(struct radio_context *ctx, char *ssid, char *psk, 
 		memset(cmd_buf, 0, 2048);
 		sprintf(cmd_buf, "ifconfig mesh0 up");
 		len = sizeof(cmd_buf) - 1;
-		ret = run_sys_cmd(cmd_buf, resp_buf, len);
+		ret = wifi_hal_run_sys_cmd(cmd_buf, resp_buf, len);
 		if (ret) {
 			printf("failed to up mesh0 if\n");
 			return -1;
@@ -871,7 +858,7 @@ static int wifi_hal_join_mesh(struct radio_context *ctx, char *ssid, char *psk, 
 
 	memset(cmd_buf, 0, 2048);
 	sprintf(cmd_buf, "rm /var/run/wpa_supplicant/mesh0");
-	ret = run_sys_cmd(cmd_buf, resp_buf, len);
+	ret = wifi_hal_run_sys_cmd(cmd_buf, resp_buf, len);
 	if (ret) {
 		printf("failed to remove supplicant socket\n");
 	}
@@ -899,8 +886,8 @@ static int wifi_hal_join_mesh(struct radio_context *ctx, char *ssid, char *psk, 
 
         ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
         if (ret < 0) {
+		/* To Do: remove this once concurrency supported */
 		printf("Fail to remove existing NW\n");
-		//return ret;
 	}
 
 	memset(cmd_buf, 0, 2048);
