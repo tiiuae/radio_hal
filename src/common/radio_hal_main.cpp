@@ -44,7 +44,7 @@ int radio_hal_dettach(struct radio_context *ctx, enum radio_type type)
 }
 
 #ifdef RADIO_HAL_UNIT_TEST
-static int test_radio_hal_api(struct radio_context *ctx, char *cmd,
+static int test_radio_hal_api(struct radio_context *ctx, char *argv[],
 			       enum radio_type type)
 {
 	int err = 0;
@@ -53,6 +53,7 @@ static int test_radio_hal_api(struct radio_context *ctx, char *cmd,
 	char mac_addr[RADIO_MACADDR_SIZE] = {0};
 	char scan_results[1024] = {0};
 	struct radio_generic_func *radio_ops = ctx->cmn.rd_func;
+	char *cmd = argv[2];
 
 	switch(type)
 	{
@@ -82,6 +83,11 @@ static int test_radio_hal_api(struct radio_context *ctx, char *cmd,
 			} else if(!strcmp(cmd, "radio_hal_get_scan_result")) {
 				radio_ops->open(ctx, RADIO_WIFI);
 				radio_ops->radio_get_scan_results(ctx, scan_results);
+				printf("%s\n", scan_results);
+			} else if(!strcmp(cmd, "radio_hal_connect_ap")) {
+				radio_ops->open(ctx, RADIO_WIFI);
+				radio_ops->radio_get_scan_results(ctx, scan_results);
+				radio_ops->radio_connect_ap(ctx, argv[3], argv[4]);
 				printf("%s\n", scan_results);
 			}
 			break;
@@ -128,7 +134,7 @@ int main(int argc, char *argv[])
 				if (!ctx)
 					printf("failed to attach Wifi Radio HAL\n");
 				if (argc >= 3)
-					test_radio_hal_api(ctx, argv[2], RADIO_WIFI);
+					test_radio_hal_api(ctx, argv, RADIO_WIFI);
 				break;
 			case 'b':
 				ctx = radio_hal_attach(RADIO_BT);

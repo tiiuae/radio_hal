@@ -585,7 +585,7 @@ static int wifi_hal_send_wpa_command(struct wpa_ctrl_ctx *ctx, int index, const 
 
         if (debug) {
                 resp[*resp_size] = '\0';
-                printf("%s", resp);
+                printf("%s:%s\n", cmd, resp);
                 if (*resp_size > 0 && resp[*resp_size - 1] != '\n')
                         printf("\n");
         }
@@ -619,6 +619,78 @@ static int wifi_hal_get_scan_results(struct radio_context *ctx, char *results)
                 printf("SCAN RESULTS:%s\n", buf);
 
 	memcpy(results, buf, len);
+
+	return 0;
+}
+
+static int wifi_hal_connect_ap(struct radio_context *ctx, char *ssid, char *psk)
+{
+	struct wifi_sotftc *sc = (struct wifi_sotftc *)ctx->radio_private;
+        char cmd_buf[2048] = {0};
+        char resp_buf[2048] = {0};
+	char nw_id[6] = {0};
+        size_t len = 0;
+	int ret = 0;
+
+	len = sizeof(cmd_buf) - 1;
+	strcpy(cmd_buf, "REMOVE_NETWORK all");
+
+        ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
+        if (ret < 0) {
+		printf("Fail to remove existing NW\n");
+		return ret;
+	}
+
+	len = sizeof(cmd_buf) - 1;
+	strcpy(cmd_buf, "ADD_NETWORK");
+
+        ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
+        if (ret < 0) {
+		printf("Fail to add NW\n");
+		return ret;
+	}
+
+	if (len) {
+		/* To Do: Add check */
+		strncpy(nw_id, resp_buf, 6);
+	}
+	printf("NW ID:%s\n", nw_id);
+	memset(cmd_buf, 0, 2048);
+	len = 0;
+	strcat(cmd_buf, "SET_NETWORK ");
+	strncat(cmd_buf, nw_id, strlen(nw_id) - 1);
+	strcat(cmd_buf, " ssid ");
+	strncat(cmd_buf, ssid, strlen(ssid));
+	printf("CMD:%s\n", cmd_buf);
+	len = sizeof(cmd_buf) - 1;
+        wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
+        if (ret < 0) {
+		printf("Fail to add NW\n");
+		return ret;
+	}
+
+        if (len) {
+		if (strncmp(resp_buf, "OK", 2) == 0) {
+			memset(cmd_buf, 0, 2048);
+			snprintf(cmd_buf, 2048, "%s%s%s%s", "SET_NETWORK ", nw_id, " psk ", psk);
+			printf("CMD:%s\n", cmd_buf);
+			len = sizeof(cmd_buf) - 1;
+			wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
+		} else {
+			printf("failed to set psk\n");
+			return -1;
+		}
+		if (strncmp(resp_buf, "OK", 2) == 0) {
+			memset(cmd_buf, 0, 2048);
+			snprintf(cmd_buf, 2048, "%s%s", "ENABLE_NETWORK ", nw_id);
+			printf("CMD:%s\n", cmd_buf);
+			len = sizeof(cmd_buf) - 1;
+			wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
+		} else {
+			printf("failed to enable network\n");
+			return -1;
+		}
+	}
 
 	return 0;
 }
@@ -735,6 +807,7 @@ static struct radio_generic_func wifi_hal_ops = {
 	.radio_get_txrate = wifi_hal_get_txrate,
 	.radio_get_rxrate = wifi_hal_get_rxrate,
 	.radio_get_scan_results = wifi_hal_get_scan_results,
+	.radio_connect_ap = wifi_hal_connect_ap,
 };
 
 int wifi_hal_register_ops(struct radio_context *ctx)
