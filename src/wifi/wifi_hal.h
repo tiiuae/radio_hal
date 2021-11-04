@@ -28,9 +28,10 @@ struct wpa_ctrl_ctx {
 	int fd;
 	struct wpa_ctrl *ctrl;
 	struct wpa_ctrl *monitor;
+	struct wpa_ctrl *mesh_ctrl;
 };
 
-struct wifi_sotftc {
+struct wifi_softc {
 	char mac_addr[RADIO_MACADDR_SIZE];
 	struct netlink_ctx nl_ctx;
 	struct wpa_ctrl_ctx wpa_ctx;
