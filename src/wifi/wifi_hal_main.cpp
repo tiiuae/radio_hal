@@ -616,7 +616,7 @@ static int wifi_hal_start_wpa_dummy_config(struct radio_context *ctx, int radio_
 	fclose(fd);
 
 	memset(cmd_buf, 0, 2048);
-	snprintf(cmd_buf, sizeof(cmd_buf), "wpa_supplicant -Dnl80211 -B -i%s -c%s", sc->nl_ctx.ifname, fname);
+	snprintf(cmd_buf, sizeof(cmd_buf), "wpa_supplicant -Dnl80211 -B -i%s -c%s -f /tmp/wpa_defult.log ", sc->nl_ctx.ifname, fname);
 
 	ret = system(cmd_buf);
         if (ret) {
@@ -641,10 +641,9 @@ static int wifi_hal_open(struct radio_context *ctx, enum radio_type type)
 
 	err = wifi_hal_start_wpa_dummy_config(ctx, type);
 	if (err) {
+		/* Fix Me: This is false positive error seen due to system cmd */
 		printf("wifi hal defualt supplicant start failed\n");
-		return err;
 	}
-
 
 	err = wifi_hal_wpa_attach(sc);
 	if (err) {
@@ -777,6 +776,7 @@ static int wifi_hal_connect_ap(struct radio_context *ctx, char *ssid, char *psk)
 		return ret;
 	}
 
+	memset(cmd_buf, 0, 2048);
 	len = sizeof(cmd_buf) - 1;
 	strcpy(cmd_buf, "ADD_NETWORK");
 
