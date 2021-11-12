@@ -174,7 +174,7 @@ static int wifi_hal_ifname_resp_hdlr(struct nl_msg *msg, void *arg)
 static int wifi_hal_connection_info_hdlr(struct nl_msg *msg, void *arg)
 {
 	struct wifi_softc *sc = (struct wifi_softc *)arg;
-	struct netlink_ctx *nl_ctx = &sc->nl_ctx;
+	/* struct netlink_ctx *nl_ctx = &sc->nl_ctx; TODO future? */
 	struct nlattr *tb_msg[NL80211_ATTR_MAX + 1];
 	struct genlmsghdr *hdr = (struct genlmsghdr *)nlmsg_data(nlmsg_hdr(msg));
 	struct nlattr *sinfo[NL80211_STA_INFO_MAX + 1];
@@ -292,7 +292,7 @@ static int wifi_hal_switch_channel(struct netlink_ctx *nl_ctx, char *channel,
 	};
 	unsigned int htval = NL80211_CHAN_NO_HT;
 	enum nl80211_band band;
-	int i;
+	long unsigned int i;
 	char *end;
         int err = 0;
         struct nl_msg* ch_sw_msg = nlmsg_alloc();
@@ -546,7 +546,7 @@ static int wifi_hal_wpa_attach(struct wifi_softc *sc)
 	int len = 0;
 
 	len += sprintf(sock_path, WIFI_HAL_WPA_SOCK_PATH);
-	len += sprintf(sock_path + len, (const char *)(sc->nl_ctx.ifname));
+	len += sprintf(sock_path + len, "%s", (const char *)(sc->nl_ctx.ifname));
 	ctx->ctrl = wpa_ctrl_open2(sock_path, client_socket_dir);
 	if (!ctx->ctrl) {
 		printf("Couldn't open '%s'\n", sock_path);
@@ -596,14 +596,18 @@ static int wifi_hal_start_wpa_dummy_config(struct radio_context *ctx, int radio_
 	}
 
 	memset(cmd_buf, 0, 2048);
-	sprintf(cmd_buf, "iw dev mesh0 del", sc->nl_ctx.ifname);
+	sprintf(cmd_buf, "iw dev %s del", sc->nl_ctx.ifname);
 	len = sizeof(cmd_buf) - 1;
 	ret = wifi_hal_run_sys_cmd(cmd_buf, resp_buf, len);
 	if (ret) {
 		printf("failed to delete stale mesh interface\n");
 	}
 
-        system("pkill wpa_supplicant");
+        ret = system("pkill wpa_supplicant");
+        if (ret) {
+                printf("failed to pkill wpa_supplicant\n");
+        }
+
 	memset(cmd_buf, 0, 2048);
 	sprintf(cmd_buf, "rm /var/run/wpa_supplicant/%s", sc->nl_ctx.ifname);
 	len = sizeof(cmd_buf) - 1;
@@ -623,7 +627,7 @@ static int wifi_hal_start_wpa_dummy_config(struct radio_context *ctx, int radio_
                 printf("failed to start supplicant with defualt conf%s\n", cmd_buf);
                 return -1;
         }
-
+	return ret;
 }
 
 static int wifi_hal_open(struct radio_context *ctx, enum radio_type type)
@@ -878,7 +882,10 @@ static int wifi_hal_join_mesh(struct radio_context *ctx, char *ssid, char *psk, 
 	}
 #endif
 
-	system("sleep 1");
+	ret = system("sleep 1");
+        if (ret) {
+		printf("warning: sleep period not successfull\n");
+        }
 	wifi_hal_get_phyname(sc, cmd_buf, resp_buf, len);
 	if (!(strncmp(sc->nl_ctx.ifname, "mesh0", 5) == 0)) {
 		memset(cmd_buf, 0, 2048);
@@ -929,7 +936,10 @@ static int wifi_hal_join_mesh(struct radio_context *ctx, char *ssid, char *psk, 
 		return -1;
 	}
 
-	system("sleep 1");
+	ret = system("sleep 1");
+        if (ret) {
+                printf("warning: sleep period not successfull\n");
+	}
 
 	ret = wifi_hal_wpa_mesh_attach(sc);
 	if (ret) {
@@ -1074,7 +1084,7 @@ static int wifi_hal_wait_on_event(struct wpa_ctrl_ctx *ctx, int index, char *buf
 	}
 
 	buf[nread] = '\0';
-	printf("WiFi HAL: wait_for_event: result=%d nread=%d string=\"%s\"\n", result, nread, buf);
+	printf("WiFi HAL: wait_for_event: result=%d nread=%ld string=\"%s\"\n", result, nread, buf);
 	/* Check for EOF on the socket */
 	if (result == 0 && nread == 0) {
 		printf("got EOF on monitor socket\n");

@@ -8,8 +8,8 @@
 
 struct radio_context* radio_hal_attach(enum radio_type type)
 {
-	struct radio_context *ctx;
-	int err = 0;
+	struct radio_context *ctx = NULL;
+	/* int err = 0; TODO */
 
 	switch(type)
 	{
@@ -40,7 +40,7 @@ int radio_hal_dettach(struct radio_context *ctx, enum radio_type type)
 			break;
 	}
 
-	return 0;
+	return err;
 }
 
 #ifdef RADIO_HAL_UNIT_TEST
@@ -62,11 +62,11 @@ static int test_radio_hal_api(struct radio_context *ctx, char *argv[],
 			{
 				radio_ops->open(ctx, RADIO_WIFI);
 				radio_ops->radio_get_hal_version(version);
-				printf("VERSION:%s\n", &version);
+				printf("VERSION:%s\n", (char*) &version);
 			} else if(!strcmp(cmd, "radio_hal_get_iface_name")) {
 				radio_ops->open(ctx, RADIO_WIFI);
 				radio_ops->radio_get_iface_name(ctx, ifname, 1);
-				printf("IFNAME:%s\n", &ifname);
+				printf("IFNAME:%s\n", (char*) &ifname);
 			} else if(!strcmp(cmd, "radio_hal_get_rssi")) {
 				radio_ops->open(ctx, RADIO_WIFI);
 				printf("RSSI:%d dbm\n", radio_ops->radio_get_rssi(ctx, 1));
@@ -115,7 +115,7 @@ static void show_radio_hal_help()
 
 int main(int argc, char *argv[])
 {
-	int status, c;
+	int c;
 	const char *short_opt = "w::b::z::h::";
 	int long_opt_ptr;
 	struct radio_context *ctx = NULL;
