@@ -43,4 +43,4 @@ install:
 	cp -a -f libradio_hal.so $(INSTALL_ROOT)/usr/lib/
 
 clean:
-	rm -f *.so *.o *.d ${ALL}
+	rm -frv *.so $(OBJ) $(OBJ:.o=.d) ${ALL}
