@@ -51,7 +51,7 @@ static int test_radio_hal_api(struct radio_context *ctx, char *argv[],
 	char version[32] = {0};
 	char ifname[RADIO_IFNAME_SIZE] = {0};
 	char mac_addr[RADIO_MACADDR_SIZE] = {0};
-	char scan_results[1024] = {0};
+	char scan_results[4096] = {0};
 	struct radio_generic_func *radio_ops = ctx->cmn.rd_func;
 	char *cmd = argv[2];
 

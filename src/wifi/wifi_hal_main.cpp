@@ -748,7 +748,7 @@ static int wifi_hal_trigger_scan(struct wifi_softc *sc)
 static int wifi_hal_get_scan_results(struct radio_context *ctx, char *results)
 {
         struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
-        char buf[2048];
+        char buf[4096];
         size_t len = 0;
 
 	len = sizeof(buf) - 1;
