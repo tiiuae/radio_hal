@@ -596,7 +596,7 @@ static int wifi_hal_start_wpa_dummy_config(struct radio_context *ctx, int radio_
 	}
 
 	memset(cmd_buf, 0, 2048);
-	sprintf(cmd_buf, "iw dev %s del", sc->nl_ctx.ifname);
+	sprintf(cmd_buf, "iw dev mesh0 del");
 	len = sizeof(cmd_buf) - 1;
 	ret = wifi_hal_run_sys_cmd(cmd_buf, resp_buf, len);
 	if (ret) {
