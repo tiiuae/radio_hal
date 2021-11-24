@@ -36,55 +36,55 @@ static int wifi_hal_nl_finish_handler(struct nl_msg *msg, void *arg)
 
 void wifi_hal_mac_addr_n2a(char *mac_addr, unsigned char *arg)
 {
-        int i, l;
+	int i, l;
 
-        l = 0;
-        for (i = 0; i < ETH_ALEN ; i++) {
-                if (i == 0) {
-                        sprintf(mac_addr+l, "%02x", arg[i]);
-                        l += 2;
-                } else {
-                        sprintf(mac_addr+l, ":%02x", arg[i]);
-                        l += 3;
-                }
-        }
+	l = 0;
+	for (i = 0; i < ETH_ALEN ; i++) {
+		if (i == 0) {
+			sprintf(mac_addr+l, "%02x", arg[i]);
+			l += 2;
+		} else {
+			sprintf(mac_addr+l, ":%02x", arg[i]);
+			l += 3;
+		}
+	}
 }
 
 int wifi_hal_run_sys_cmd(char *cmd, char *resp_buf, int resp_size)
 {
-    FILE *f;
-    char *buf = resp_buf;
-    int size=resp_size, resp_buf_bytes=0, readbytes=0;
+	FILE *f;
+	char *buf = resp_buf;
+	int size=resp_size, resp_buf_bytes=0, readbytes=0;
 
-    if((f = popen(cmd, "r")) == NULL) {
-        printf("popen %s error\n", cmd);
-        return -1;
-    }
-
-    while(!feof(f))
-    {
-        *buf = 0;
-	if(size>=128) {
-		resp_buf_bytes=128;
-	} else {
-		resp_buf_bytes=size-1;
+	if((f = popen(cmd, "r")) == NULL) {
+		printf("popen %s error\n", cmd);
+		return -1;
 	}
 
-        fgets(buf,resp_buf_bytes,f);
-        readbytes=strlen(buf);
-        if(!readbytes)
-	    break;
+	while(!feof(f))
+	{
+		*buf = 0;
+		if(size>=128) {
+			resp_buf_bytes=128;
+		} else {
+			resp_buf_bytes=size-1;
+		}
 
-        size-=readbytes;
-        buf += readbytes;
-    }
-    pclose(f);
-    resp_buf[resp_size-1]=0;
+		fgets(buf,resp_buf_bytes,f);
+		readbytes=strlen(buf);
+		if(!readbytes)
+			break;
 
-    if (debug)
-	printf("sys cmd:%s resp:%s\n", cmd, resp_buf);
+		size-=readbytes;
+		buf += readbytes;
+	}
+	pclose(f);
+	resp_buf[resp_size-1]=0;
 
-    return 0;
+	if (debug)
+		printf("sys cmd:%s resp:%s\n", cmd, resp_buf);
+
+	return 0;
 }
 
 int wifi_hal_channel_to_frequency(int chan, enum nl80211_band band)
@@ -93,24 +93,24 @@ int wifi_hal_channel_to_frequency(int chan, enum nl80211_band band)
 		return 0;
 
 	switch (band) {
-	case NL80211_BAND_2GHZ:
-		if (chan == 14)
-			return 2484;
-		else if (chan < 14)
-			return 2407 + chan * 5;
-		break;
-	case NL80211_BAND_5GHZ:
-		if (chan >= 182 && chan <= 196)
-			return 4000 + chan * 5;
-		else
-			return 5000 + chan * 5;
-		break;
-	case NL80211_BAND_60GHZ:
-		if (chan < 5)
-			return 56160 + chan * 2160;
-		break;
-	default:
-		;
+		case NL80211_BAND_2GHZ:
+			if (chan == 14)
+				return 2484;
+			else if (chan < 14)
+				return 2407 + chan * 5;
+			break;
+		case NL80211_BAND_5GHZ:
+			if (chan >= 182 && chan <= 196)
+				return 4000 + chan * 5;
+			else
+				return 5000 + chan * 5;
+			break;
+		case NL80211_BAND_60GHZ:
+			if (chan < 5)
+				return 56160 + chan * 2160;
+			break;
+		default:
+			;
 	}
 
 	return 0;
@@ -155,10 +155,10 @@ static int wifi_hal_ifname_resp_hdlr(struct nl_msg *msg, void *arg)
 	struct nlattr *tb_msg[NL80211_ATTR_MAX + 1];
 
 	nla_parse(tb_msg,
-		  NL80211_ATTR_MAX,
-		  genlmsg_attrdata(hdr, 0),
-		  genlmsg_attrlen(hdr, 0),
-		  NULL);
+			NL80211_ATTR_MAX,
+			genlmsg_attrdata(hdr, 0),
+			genlmsg_attrlen(hdr, 0),
+			NULL);
 
 	if (tb_msg[NL80211_ATTR_IFNAME]) {
 		strcpy(nl_ctx->ifname, nla_get_string(tb_msg[NL80211_ATTR_IFNAME]));
@@ -202,10 +202,10 @@ static int wifi_hal_connection_info_hdlr(struct nl_msg *msg, void *arg)
 	rate_info[NL80211_RATE_INFO_SHORT_GI].type = NLA_FLAG;
 
 	nla_parse(tb_msg,
-            NL80211_ATTR_MAX,
-            genlmsg_attrdata(hdr, 0),
-            genlmsg_attrlen(hdr, 0),
-            NULL);
+			NL80211_ATTR_MAX,
+			genlmsg_attrdata(hdr, 0),
+			genlmsg_attrlen(hdr, 0),
+			NULL);
 
 	if (!tb_msg[NL80211_ATTR_STA_INFO]) {
 		printf("failed to parse sta info\n");
@@ -213,7 +213,7 @@ static int wifi_hal_connection_info_hdlr(struct nl_msg *msg, void *arg)
 	}
 
 	if (nla_parse_nested(sinfo, NL80211_STA_INFO_MAX,
-		tb_msg[NL80211_ATTR_STA_INFO], sta_info)) {
+				tb_msg[NL80211_ATTR_STA_INFO], sta_info)) {
 		printf("failed to parse nested sta info\n");
 		return NL_SKIP;
 	}
@@ -225,7 +225,7 @@ static int wifi_hal_connection_info_hdlr(struct nl_msg *msg, void *arg)
 	if (sinfo[NL80211_STA_INFO_TX_BITRATE])
 	{
 		if (nla_parse_nested(rinfo, NL80211_RATE_INFO_MAX,
-			sinfo[NL80211_STA_INFO_TX_BITRATE], rate_info))
+					sinfo[NL80211_STA_INFO_TX_BITRATE], rate_info))
 		{
 			printf("failed to parse nested rate attributes!\n");
 		}
@@ -239,7 +239,7 @@ static int wifi_hal_connection_info_hdlr(struct nl_msg *msg, void *arg)
 	if (sinfo[NL80211_STA_INFO_RX_BITRATE])
 	{
 		if (nla_parse_nested(rinfo, NL80211_RATE_INFO_MAX,
-			sinfo[NL80211_STA_INFO_RX_BITRATE], rate_info))
+					sinfo[NL80211_STA_INFO_RX_BITRATE], rate_info))
 		{
 			printf("failed to parse nested rate attributes!\n");
 		}
@@ -281,7 +281,7 @@ static int wifi_hal_register_nl_cb(struct wifi_softc *sc)
 }
 
 static int wifi_hal_switch_channel(struct netlink_ctx *nl_ctx, char *channel,
-				 unsigned int count)
+		unsigned int count)
 {
 	static const struct {
 		const char *name;
@@ -295,23 +295,23 @@ static int wifi_hal_switch_channel(struct netlink_ctx *nl_ctx, char *channel,
 	enum nl80211_band band;
 	long unsigned int i;
 	char *end;
-        int err = 0;
-        struct nl_msg* ch_sw_msg = nlmsg_alloc();
+	int err = 0;
+	struct nl_msg* ch_sw_msg = nlmsg_alloc();
 	int chan;
 
-        if (!ch_sw_msg) {
-                printf("failed to allocate ch switch NL message.\n");
-                return -ENOMEM;
-        }
+	if (!ch_sw_msg) {
+		printf("failed to allocate ch switch NL message.\n");
+		return -ENOMEM;
+	}
 
-        genlmsg_put(ch_sw_msg,
-                    NL_AUTO_PORT,
-                    NL_AUTO_SEQ,
-                    nl_ctx->nl80211_id,
-                    0,
-                    NLM_F_DUMP,
-                    NL80211_CMD_GET_STATION,
-                    0);
+	genlmsg_put(ch_sw_msg,
+			NL_AUTO_PORT,
+			NL_AUTO_SEQ,
+			nl_ctx->nl80211_id,
+			0,
+			NLM_F_DUMP,
+			NL80211_CMD_GET_STATION,
+			0);
 
 	chan = strtoul(channel, &end, 10);
 	band = chan <= 14 ? NL80211_BAND_2GHZ : NL80211_BAND_5GHZ;
@@ -340,8 +340,8 @@ static int wifi_hal_switch_channel(struct netlink_ctx *nl_ctx, char *channel,
 	return 0;
 
 nla_put_failure:
-        nlmsg_free(ch_sw_msg);
-        return err;
+	nlmsg_free(ch_sw_msg);
+	return err;
 }
 
 static int wifi_hal_nl80211_attach(struct wifi_softc *sc)
@@ -433,13 +433,13 @@ static int wifi_hal_get_interface(struct netlink_ctx *nl_ctx)
 		return -ENOMEM;
 	}
 	genlmsg_put(if_get_msg,
-		    NL_AUTO_PORT,
-		    NL_AUTO_SEQ,
-		    nl_ctx->nl80211_id,
-		    0,
-		    NLM_F_DUMP,
-		    NL80211_CMD_GET_INTERFACE,
-		    0);
+			NL_AUTO_PORT,
+			NL_AUTO_SEQ,
+			nl_ctx->nl80211_id,
+			0,
+			NLM_F_DUMP,
+			NL80211_CMD_GET_INTERFACE,
+			0);
 	nl_ctx->if_cb_err = 1;
 	err = nl_send_auto(nl_ctx->sock, if_get_msg);
 	while (nl_ctx->if_cb_err > 0)
@@ -464,13 +464,13 @@ static int wifi_hal_get_stainfo(struct netlink_ctx *nl_ctx)
 		return -ENOMEM;
 	}
 	genlmsg_put(sta_info_msg,
-		    NL_AUTO_PORT,
-		    NL_AUTO_SEQ,
-		    nl_ctx->nl80211_id,
-		    0,
-		    NLM_F_DUMP,
-		    NL80211_CMD_GET_STATION,
-		    0);
+			NL_AUTO_PORT,
+			NL_AUTO_SEQ,
+			nl_ctx->nl80211_id,
+			0,
+			NLM_F_DUMP,
+			NL80211_CMD_GET_STATION,
+			0);
 
 	nl_ctx->linkinfo_cb_err = 1;
 	nla_put_u32(sta_info_msg, NL80211_ATTR_IFINDEX, nl_ctx->ifindex);
@@ -505,7 +505,7 @@ int wifi_hal_get_iface_name(struct radio_context *ctx, char *name, int radio_ind
 static int wifi_hal_get_txrate (struct radio_context *ctx, int radio_index)
 {
 	struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
-	
+
 	wifi_hal_get_interface(&sc->nl_ctx);
 	wifi_hal_get_stainfo(&sc->nl_ctx);
 
@@ -515,7 +515,7 @@ static int wifi_hal_get_txrate (struct radio_context *ctx, int radio_index)
 static int wifi_hal_get_rxrate (struct radio_context *ctx, int radio_index)
 {
 	struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
-	
+
 	wifi_hal_get_interface(&sc->nl_ctx);
 	wifi_hal_get_stainfo(&sc->nl_ctx);
 
@@ -568,7 +568,6 @@ static int wifi_hal_wpa_attach(struct wifi_softc *sc)
 		wpa_ctrl_close(ctx->ctrl);
 		return -1;
 	}
-
 
 	return 0;
 }
@@ -737,12 +736,12 @@ static int wifi_hal_send_wpa_command(struct wpa_ctrl_ctx *ctx, int index, const 
 		return -1;
 	}
 
-        if (debug) {
-                resp[*resp_size] = '\0';
-                printf("%s:%s\n", cmd, resp);
-                if (*resp_size > 0 && resp[*resp_size - 1] != '\n')
-                        printf("\n");
-        }
+	if (debug) {
+		resp[*resp_size] = '\0';
+		printf("%s:%s\n", cmd, resp);
+		if (*resp_size > 0 && resp[*resp_size - 1] != '\n')
+			printf("\n");
+	}
 
 	return 0;
 }
@@ -764,40 +763,40 @@ static int wifi_hal_send_wpa_mesh_command(struct wpa_ctrl_ctx *ctx, int index, c
 		return -1;
 	}
 
-        if (debug) {
-                resp[*resp_size] = '\0';
-                printf("%s:%s\n", cmd, resp);
-                if (*resp_size > 0 && resp[*resp_size - 1] != '\n')
-                        printf("\n");
-        }
+	if (debug) {
+		resp[*resp_size] = '\0';
+		printf("%s:%s\n", cmd, resp);
+		if (*resp_size > 0 && resp[*resp_size - 1] != '\n')
+			printf("\n");
+	}
 
 	return 0;
 }
 
 static int wifi_hal_trigger_scan(struct wifi_softc *sc)
 {
-        char buf[2048];
-        size_t len = 0;
+	char buf[2048];
+	size_t len = 0;
 
 	len = sizeof(buf) - 1;
-        wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, "SCAN", buf, &len);
-        if (len)
-                printf("SCAN TRIGGER:%s\n", buf);
+	wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, "SCAN", buf, &len);
+	if (len)
+		printf("SCAN TRIGGER:%s\n", buf);
 
 	return 0;
 }
 
 static int wifi_hal_get_scan_results(struct radio_context *ctx, char *results)
 {
-        struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
-        char buf[4096];
-        size_t len = 0;
+	struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
+	char buf[4096];
+	size_t len = 0;
 
 	len = sizeof(buf) - 1;
 	wifi_hal_trigger_scan(sc);
-        wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, "SCAN_RESULTS", buf, &len);
-        if (len && debug)
-                printf("SCAN RESULTS:%s\n", buf);
+	wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, "SCAN_RESULTS", buf, &len);
+	if (len && debug)
+		printf("SCAN RESULTS:%s\n", buf);
 
 	memcpy(results, buf, len);
 
@@ -807,17 +806,17 @@ static int wifi_hal_get_scan_results(struct radio_context *ctx, char *results)
 static int wifi_hal_connect_ap(struct radio_context *ctx, char *ssid, char *psk)
 {
 	struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
-        char cmd_buf[2048] = {0};
-        char resp_buf[2048] = {0};
+	char cmd_buf[2048] = {0};
+	char resp_buf[2048] = {0};
 	char nw_id[6] = {0};
-        size_t len = 0;
+	size_t len = 0;
 	int ret = 0;
 
 	len = sizeof(cmd_buf) - 1;
 	strcpy(cmd_buf, "REMOVE_NETWORK all");
 
-        ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
-        if (ret < 0) {
+	ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
+	if (ret < 0) {
 		printf("Fail to remove existing NW\n");
 		return ret;
 	}
@@ -826,8 +825,8 @@ static int wifi_hal_connect_ap(struct radio_context *ctx, char *ssid, char *psk)
 	len = sizeof(cmd_buf) - 1;
 	strcpy(cmd_buf, "ADD_NETWORK");
 
-        ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
-        if (ret < 0) {
+	ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
+	if (ret < 0) {
 		printf("Fail to add NW\n");
 		return ret;
 	}
@@ -845,13 +844,13 @@ static int wifi_hal_connect_ap(struct radio_context *ctx, char *ssid, char *psk)
 	strncat(cmd_buf, ssid, strlen(ssid));
 	printf("CMD:%s\n", cmd_buf);
 	len = sizeof(cmd_buf) - 1;
-        wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
-        if (ret < 0) {
+	wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
+	if (ret < 0) {
 		printf("Fail to add NW\n");
 		return ret;
 	}
 
-        if (len) {
+	if (len) {
 		if (strncmp(resp_buf, "OK", 2) == 0) {
 			memset(cmd_buf, 0, 2048);
 			snprintf(cmd_buf, 2048, "%s%s%s%s", "SET_NETWORK ", nw_id, " psk ", psk);
@@ -881,12 +880,12 @@ static int wifi_hal_get_phyname(struct wifi_softc *sc, char *cmd, char *resp_buf
 {
 	int ret;
 
-        sprintf(cmd, "echo $(iw dev %s info | awk '/wiphy/ {printf \"phy\" $2}')", sc->nl_ctx.ifname);
-        ret = wifi_hal_run_sys_cmd(cmd, resp_buf, resp_size);
-        if (ret) {
-                printf("failed to kill supplicant\n");
-                return -1;
-        }
+	sprintf(cmd, "echo $(iw dev %s info | awk '/wiphy/ {printf \"phy\" $2}')", sc->nl_ctx.ifname);
+	ret = wifi_hal_run_sys_cmd(cmd, resp_buf, resp_size);
+	if (ret) {
+		printf("failed to kill supplicant\n");
+		return -1;
+	}
 
 	return 0;
 }
@@ -894,10 +893,10 @@ static int wifi_hal_get_phyname(struct wifi_softc *sc, char *cmd, char *resp_buf
 static int wifi_hal_join_mesh(struct radio_context *ctx, char *ssid, char *psk, char *freq)
 {
 	struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
-        char cmd_buf[2048] = {0};
-        char resp_buf[2048] = {0};
+	char cmd_buf[2048] = {0};
+	char resp_buf[2048] = {0};
 	char nw_id[6] = {0};
-        size_t len = 0;
+	size_t len = 0;
 	int ret = 0;
 
 	/* To do: Back up  AP config and Add support for SAP + MESH later */
@@ -912,9 +911,9 @@ static int wifi_hal_join_mesh(struct radio_context *ctx, char *ssid, char *psk, 
 	}
 
 	ret = system("sleep 1");
-        if (ret) {
+	if (ret) {
 		printf("warning: sleep period not successfull\n");
-        }
+	}
 	wifi_hal_get_phyname(sc, cmd_buf, resp_buf, len);
 	if (!(strncmp(sc->nl_ctx.ifname, "mesh0", 5) == 0)) {
 		memset(cmd_buf, 0, 2048);
@@ -966,8 +965,8 @@ static int wifi_hal_join_mesh(struct radio_context *ctx, char *ssid, char *psk, 
 	}
 
 	ret = system("sleep 1");
-        if (ret) {
-                printf("warning: sleep period not successfull\n");
+	if (ret) {
+		printf("warning: sleep period not successfull\n");
 	}
 
 	ret = wifi_hal_wpa_mesh_attach(sc);
@@ -979,8 +978,8 @@ static int wifi_hal_join_mesh(struct radio_context *ctx, char *ssid, char *psk, 
 	len = sizeof(cmd_buf) - 1;
 	strcpy(cmd_buf, "REMOVE_NETWORK all");
 
-        ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
-        if (ret < 0) {
+	ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
+	if (ret < 0) {
 		/* To Do: remove this once concurrency supported */
 		printf("Fail to remove existing NW\n");
 	}
@@ -1123,10 +1122,10 @@ static int wifi_hal_wait_on_event(struct wpa_ctrl_ctx *ctx, int index, char *buf
 	}
 	/* strip verbose info from event */
 	if (buf[0] == '<') {
-	char *match = strchr(buf, '>');
+		char *match = strchr(buf, '>');
 		if (match != NULL) {
-		nread -= (match+1-buf);
-		memmove(buf, match+1, nread+1);
+			nread -= (match+1-buf);
+			memmove(buf, match+1, nread+1);
 		}
 	}
 

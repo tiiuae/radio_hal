@@ -45,7 +45,7 @@ int radio_hal_dettach(struct radio_context *ctx, enum radio_type type)
 
 #ifdef RADIO_HAL_UNIT_TEST
 static int test_radio_hal_api(struct radio_context *ctx, char *argv[],
-			       enum radio_type type)
+		enum radio_type type)
 {
 	int err = 0;
 	char version[32] = {0};
