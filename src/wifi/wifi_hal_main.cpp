@@ -580,19 +580,37 @@ static void wifi_hal_wpa_dettach(struct wifi_softc *sc)
 	wpa_ctrl_close(ctx->ctrl);
 }
 
+int create_default_wpa_config(void)
+{
+	int ret = 0;
+	FILE *fd = NULL;
+	char fname[100] = {0};
+
+	snprintf(fname, sizeof(fname), WPA_SUPPLICANT_DEFAULT_CONFIG);
+
+	fd = fopen(fname, "w");
+	if (!fd) {
+		return -ENOMEM;
+	}
+
+	fprintf(fd, "ctrl_interface=DIR=/var/run/wpa_supplicant\n");
+	fclose(fd);
+
+	return 0;
+}
+
 static int wifi_hal_start_wpa_dummy_config(struct radio_context *ctx, int radio_index)
 {
 	char cmd_buf[2048] = {0};
 	char resp_buf[2048] = {0};
-	FILE *fd = NULL;
-	char fname[100] = {0};
 	int ret = 0, len = 0;
 
 	struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
-	snprintf(fname, sizeof(fname), "/tmp/wpa_init.conf");
-	fd = fopen(fname, "w");
-	if (!fd) {
-		return -ENOMEM;
+
+	create_default_wpa_config();
+	if (ret) {
+		printf("failed to create default wpa configuration\n");
+		return -1;
 	}
 
 	memset(cmd_buf, 0, 2048);
@@ -600,44 +618,67 @@ static int wifi_hal_start_wpa_dummy_config(struct radio_context *ctx, int radio_
 	len = sizeof(cmd_buf) - 1;
 	ret = wifi_hal_run_sys_cmd(cmd_buf, resp_buf, len);
 	if (ret) {
-		printf("failed to delete stale mesh interface\n");
+		printf("warning: failed to delete stale mesh interface\n");
 	}
 
-        ret = system("pkill wpa_supplicant");
-        if (ret) {
-                printf("failed to pkill wpa_supplicant\n");
-        }
+	ret = system("pkill wpa_supplicant");
+	if (ret) {
+		printf("warning: failed to pkill wpa_supplicant\n");
+	}
 
 	memset(cmd_buf, 0, 2048);
 	sprintf(cmd_buf, "rm /var/run/wpa_supplicant/%s", sc->nl_ctx.ifname);
 	len = sizeof(cmd_buf) - 1;
 	ret = wifi_hal_run_sys_cmd(cmd_buf, resp_buf, len);
 	if (ret) {
-		printf("failed to delete default ctrl interface\n");
+		printf("warning: failed to delete default ctrl interface\n");
 	}
 
-	fprintf(fd, "ctrl_interface=DIR=/var/run/wpa_supplicant\n");
-	fclose(fd);
-
 	memset(cmd_buf, 0, 2048);
-	snprintf(cmd_buf, sizeof(cmd_buf), "wpa_supplicant -Dnl80211 -B -i%s -c%s -f /tmp/wpa_defult.log ", sc->nl_ctx.ifname, fname);
+	snprintf(cmd_buf, sizeof(cmd_buf), "wpa_supplicant -dd -Dnl80211 -B -i%s -c%s -f /tmp/wpa_default.log ", sc->nl_ctx.ifname, WPA_SUPPLICANT_DEFAULT_CONFIG);
 
 	ret = system(cmd_buf);
-        if (ret) {
-                printf("failed to start supplicant with defualt conf%s\n", cmd_buf);
-                return -1;
-        }
+	if (ret) {
+		printf("failed to start supplicant with default conf\n");
+		return -1;
+	}
 	return ret;
 }
 
 static int wifi_hal_open(struct radio_context *ctx, enum radio_type type)
 {
 	struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
-	int err;
+	int err = 0, ret = 0, len = 0;
+	char cmd_buf[2048] = {0};
+	char resp_buf[2048] = {0};
 
 	err = wifi_hal_get_interface(&sc->nl_ctx);
-	if (err) {
-		printf("failed to get interface \n");
+
+	/* wifi interface name handling TODO for multiple wifi */
+	if (!err && !(int)sc->nl_ctx.ifname[0]) {
+		memset(cmd_buf, 0, 2048);
+		sprintf(cmd_buf, "iw phy phy0 interface add wlp1s0 type managed");
+		len = sizeof(cmd_buf) - 1;
+		ret = wifi_hal_run_sys_cmd(cmd_buf, resp_buf, len);
+		if (ret) {
+			printf("failed to add wlp1s0\n");
+			return -1;
+		}
+		err = wifi_hal_get_interface(&sc->nl_ctx);
+	} else if (strncmp(sc->nl_ctx.ifname, "mesh0", 5) == 0) {
+		memset(cmd_buf, 0, 2048);
+		sprintf(cmd_buf, "iw dev %s del", sc->nl_ctx.ifname);
+		len = sizeof(cmd_buf) - 1;
+		ret = wifi_hal_run_sys_cmd(cmd_buf, resp_buf, len);
+		if (ret) {
+			printf("failed to delete default managed interface\n");
+			return -1;
+		}
+		err = wifi_hal_get_interface(&sc->nl_ctx);
+	}
+
+	if (err){
+		printf("failed to get interface\n");
 		return err;
 	}
 
@@ -646,7 +687,7 @@ static int wifi_hal_open(struct radio_context *ctx, enum radio_type type)
 	err = wifi_hal_start_wpa_dummy_config(ctx, type);
 	if (err) {
 		/* Fix Me: This is false positive error seen due to system cmd */
-		printf("wifi hal defualt supplicant start failed\n");
+		printf("wifi hal default supplicant start failed\n");
 	}
 
 	err = wifi_hal_wpa_attach(sc);
@@ -869,19 +910,6 @@ static int wifi_hal_join_mesh(struct radio_context *ctx, char *ssid, char *psk, 
 		return -1;
 	}
 
-#if 0
-	if (!(strncmp(sc->nl_ctx.ifname, "mesh0", 5) == 0)) {
-		memset(cmd_buf, 0, 2048);
-		sprintf(cmd_buf, "iw dev %s del", sc->nl_ctx.ifname);
-		len = sizeof(cmd_buf) - 1;
-		ret = wifi_hal_run_sys_cmd(cmd_buf, resp_buf, len);
-		if (ret) {
-			printf("failed to delete default managed interface\n");
-			return -1;
-		}
-	}
-#endif
-
 	ret = system("sleep 1");
         if (ret) {
 		printf("warning: sleep period not successfull\n");
@@ -923,11 +951,11 @@ static int wifi_hal_join_mesh(struct radio_context *ctx, char *ssid, char *psk, 
 	sprintf(cmd_buf, "rm /var/run/wpa_supplicant/mesh0");
 	ret = wifi_hal_run_sys_cmd(cmd_buf, resp_buf, len);
 	if (ret) {
-		printf("failed to remove supplicant socket\n");
+		printf("warning: failed to remove supplicant socket\n");
 	}
 
 	memset(cmd_buf, 0, 2048);
-	sprintf(cmd_buf, "wpa_supplicant -B -imesh0 -c/etc/wpa_supplicant/wpa_supplicant-mesh.conf -f /tmp/wpa_supplicant_11s.log");
+	sprintf(cmd_buf, "wpa_supplicant -dd -B -imesh0 -Dnl80211 -c%s -f /tmp/wpa_supplicant_11s.log", WPA_SUPPLICANT_DEFAULT_CONFIG);
 	len = sizeof(cmd_buf) - 1;
 	ret = system(cmd_buf);
 	//ret = execlp("wpa_supplicant", "wpa_supplicant", "-Dnl80211", "-B", "-imesh0", "-c/etc/wpa_supplicant/wpa_supplicant-mesh.conf", "-dd", NULL);
