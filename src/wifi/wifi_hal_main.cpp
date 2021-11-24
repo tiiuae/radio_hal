@@ -21,6 +21,7 @@
 #define WIFI_RADIO_HAL_MAJOR_VERSION 1
 #define WIFI_RADIO_HAL_MINOR_VERSION 0
 #define WIFI_HAL_WPA_SOCK_PATH "/var/run/wpa_supplicant/"
+#define WPA_SUPPLICANT_DEFAULT_CONFIG "/tmp/wpa_supplicant.conf"
 #define CONFIG_PROVISON_MACADDR
 static const char *client_socket_dir = NULL;
 static int debug;
