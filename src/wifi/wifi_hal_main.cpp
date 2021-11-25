@@ -890,6 +890,100 @@ static int wifi_hal_get_phyname(struct wifi_softc *sc, char *cmd, char *resp_buf
 	return 0;
 }
 
+static int wifi_hal_create_ap(struct radio_context *ctx, char *ssid, char *psk, char *freq)
+{
+	struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
+	char cmd_buf[2048] = {0};
+	char resp_buf[2048] = {0};
+	char nw_id[6] = {0};
+	size_t len = 0;
+	int ret = 0;
+
+	len = sizeof(cmd_buf) - 1;
+	strcpy(cmd_buf, "REMOVE_NETWORK all");
+
+	ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
+	if (ret < 0) {
+		printf("Fail to remove existing NW\n");
+		return ret;
+	}
+
+	memset(cmd_buf, 0, 2048);
+	len = sizeof(cmd_buf) - 1;
+	strcpy(cmd_buf, "ADD_NETWORK");
+
+	ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
+	if (ret < 0) {
+		printf("Fail to add NW\n");
+		return ret;
+	}
+
+	if (len) {
+		/* To Do: Add check */
+		strncpy(nw_id, resp_buf, 6);
+	}
+	printf("NW ID:%s\n", nw_id);
+
+	if (len) {
+		memset(cmd_buf, 0, 2048);
+		sprintf(cmd_buf, "SET_NETWORK %s mode 2", nw_id);
+		len = sizeof(cmd_buf) - 1;
+		ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
+		if (ret || !strncmp(resp_buf, "OK", 2) == 0) {
+			printf("failed to set mesh mode\n");
+			return -1;
+		}
+	}
+
+	memset(cmd_buf, 0, 2048);
+	sprintf(cmd_buf, "SET_NETWORK %s ssid %s", nw_id, ssid);
+	len = sizeof(cmd_buf) - 1;
+	ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
+	if (ret || !strncmp(resp_buf, "OK", 2) == 0) {
+		printf("failed to set mesh ssid\n");
+		return -1;
+	}
+
+	memset(cmd_buf, 0, 2048);
+	sprintf(cmd_buf, "SET_NETWORK %s frequency %s", nw_id, freq);
+	len = sizeof(cmd_buf) - 1;
+	ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
+	if (ret || !strncmp(resp_buf, "OK", 2) == 0) {
+		printf("failed to set mesh freq\n");
+		return -1;
+	}
+
+	memset(cmd_buf, 0, 2048);
+	sprintf(cmd_buf, "SET_NETWORK %s key_mgmt WPA-PSK", nw_id);
+	len = sizeof(cmd_buf) - 1;
+	ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
+	if (ret || !strncmp(resp_buf, "OK", 2) == 0) {
+		printf("failed to set mesh key mgmt\n");
+		return -1;
+	}
+
+	memset(cmd_buf, 0, 2048);
+	sprintf(cmd_buf, "SET_NETWORK %s psk %s", nw_id, psk);
+	len = sizeof(cmd_buf) - 1;
+	ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
+	if (ret || !strncmp(resp_buf, "OK", 2) == 0) {
+		printf("failed to set mesh psk\n");
+		return -1;
+	}
+
+	memset(cmd_buf, 0, 2048);
+	sprintf(cmd_buf, "%s%s", "ENABLE_NETWORK ", nw_id);
+	len = sizeof(cmd_buf) - 1;
+	ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
+
+	if (ret || !strncmp(resp_buf, "OK", 2) == 0) {
+			printf("failed to enable network\n");
+		return -1;
+	}
+
+	return 0;
+}
+
 static int wifi_hal_join_mesh(struct radio_context *ctx, char *ssid, char *psk, char *freq)
 {
 	struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
@@ -975,9 +1069,9 @@ static int wifi_hal_join_mesh(struct radio_context *ctx, char *ssid, char *psk, 
 		return -1;
 	}
 
+	memset(cmd_buf, 0, 2048);
 	len = sizeof(cmd_buf) - 1;
 	strcpy(cmd_buf, "REMOVE_NETWORK all");
-
 	ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
 	if (ret < 0) {
 		/* To Do: remove this once concurrency supported */
@@ -1167,6 +1261,7 @@ static struct radio_generic_func wifi_hal_ops = {
 	.radio_get_rxrate = wifi_hal_get_rxrate,
 	.radio_get_scan_results = wifi_hal_get_scan_results,
 	.radio_connect_ap = wifi_hal_connect_ap,
+	.radio_create_ap = wifi_hal_create_ap,
 	.radio_join_mesh = wifi_hal_join_mesh,
 };
 

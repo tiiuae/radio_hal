@@ -88,6 +88,9 @@ static int test_radio_hal_api(struct radio_context *ctx, char *argv[],
 				radio_ops->radio_get_scan_results(ctx, scan_results);
 				printf("%s\n", scan_results);
 				radio_ops->radio_connect_ap(ctx, argv[3], argv[4]);
+			} else if(!strcmp(cmd, "radio_hal_create_ap")) {
+				radio_ops->open(ctx, RADIO_WIFI);
+				radio_ops->radio_create_ap(ctx, argv[3], argv[4], argv[5]);
 			} else if(!strcmp(cmd, "radio_mesh_join")) {
 				radio_ops->open(ctx, RADIO_WIFI);
 				radio_ops->radio_get_iface_name(ctx, ifname, 1);

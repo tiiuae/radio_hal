@@ -82,6 +82,7 @@ typedef struct radio_generic_func {
 	int (* radio_get_rxrate) (struct radio_context *ctx, int radio_index);
 	int (* radio_get_scan_results)(struct radio_context *ctx, char *results);
 	int (*radio_connect_ap)(struct radio_context *ctx, char *ssid, char *psk);
+	int (*radio_create_ap)(struct radio_context *ctx, char *ssid, char *psk, char *freq);
 	int (*radio_join_mesh)(struct radio_context *ctx, char *ssid, char *psk, char *freq);
 } radio_gen_func_t;
 
