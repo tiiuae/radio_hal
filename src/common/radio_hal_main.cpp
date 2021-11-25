@@ -45,7 +45,7 @@ int radio_hal_dettach(struct radio_context *ctx, enum radio_type type)
 
 #ifdef RADIO_HAL_UNIT_TEST
 static int test_radio_hal_api(struct radio_context *ctx, char *argv[],
-			       enum radio_type type)
+		enum radio_type type)
 {
 	int err = 0;
 	char version[32] = {0};
@@ -58,8 +58,7 @@ static int test_radio_hal_api(struct radio_context *ctx, char *argv[],
 	switch(type)
 	{
 		case RADIO_WIFI:
-			if(!strcmp(cmd, "radio_get_hal_version"))
-			{
+			if(!strcmp(cmd, "radio_get_hal_version")) {
 				radio_ops->open(ctx, RADIO_WIFI);
 				radio_ops->radio_get_hal_version(version);
 				printf("VERSION:%s\n", (char*) &version);
@@ -89,11 +88,11 @@ static int test_radio_hal_api(struct radio_context *ctx, char *argv[],
 				radio_ops->radio_get_scan_results(ctx, scan_results);
 				printf("%s\n", scan_results);
 				radio_ops->radio_connect_ap(ctx, argv[3], argv[4]);
-                        } else if(!strcmp(cmd, "radio_mesh_join")) {
-                                radio_ops->open(ctx, RADIO_WIFI);
+			} else if(!strcmp(cmd, "radio_mesh_join")) {
+				radio_ops->open(ctx, RADIO_WIFI);
 				radio_ops->radio_get_iface_name(ctx, ifname, 1);
-                                radio_ops->radio_join_mesh(ctx, argv[3], argv[4], argv[5]);
-                        }
+				radio_ops->radio_join_mesh(ctx, argv[3], argv[4], argv[5]);
+			}
 			break;
 		case RADIO_BT:
 			break;
