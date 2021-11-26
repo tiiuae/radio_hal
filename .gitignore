@@ -1,0 +1,5 @@
+.idea/
+*.o
+*.d
+*.so
+radio_hal_daemon
