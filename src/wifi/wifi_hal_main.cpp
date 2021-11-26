@@ -24,7 +24,7 @@
 #define WPA_SUPPLICANT_DEFAULT_CONFIG "/tmp/wpa_supplicant.conf"
 #define CONFIG_PROVISON_MACADDR
 static const char *client_socket_dir = NULL;
-static int debug;
+static int debug = 1;
 
 static int wifi_hal_nl_finish_handler(struct nl_msg *msg, void *arg)
 {
@@ -55,6 +55,7 @@ int wifi_hal_run_sys_cmd(char *cmd, char *resp_buf, int resp_size)
 	FILE *f;
 	char *buf = resp_buf;
 	int size=resp_size, resp_buf_bytes=0, readbytes=0;
+    char *ret;
 
 	if((f = popen(cmd, "r")) == NULL) {
 		printf("popen %s error\n", cmd);
@@ -70,13 +71,14 @@ int wifi_hal_run_sys_cmd(char *cmd, char *resp_buf, int resp_size)
 			resp_buf_bytes=size-1;
 		}
 
-		fgets(buf,resp_buf_bytes,f);
-		readbytes=strlen(buf);
-		if(!readbytes)
+		ret = fgets(buf,resp_buf_bytes,f);
+		readbytes = strlen(buf);
+		if (!readbytes || ret == NULL)
 			break;
 
-		size-=readbytes;
+		size -= readbytes;
 		buf += readbytes;
+
 	}
 	pclose(f);
 	resp_buf[resp_size-1]=0;
