@@ -60,3 +60,7 @@ install:
 
 clean:
 	rm -frv *.so $(OBJ) $(OBJ:.o=.d) ${ALL}
+
+rebuild:
+	$(MAKE) clean
+	$(MAKE) all
