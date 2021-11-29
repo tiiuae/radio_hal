@@ -2,6 +2,7 @@
 #define __RADIO_HAL_H__
 
 #define RADIO_IFNAME_SIZE 16
+#define RADIO_PHYNAME_SIZE 8
 #define RADIO_HAL_VERSION_SIZE 32
 #define RADIO_MACADDR_SIZE 18
 
@@ -52,7 +53,7 @@ typedef struct {
     int channel;
 } radio_iface_info;
 
-struct {
+__attribute__((unused)) struct {
     radio_channel_width width;
     int center_frequency0;
     int center_frequency1;

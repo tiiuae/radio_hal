@@ -24,7 +24,7 @@
 #define WPA_SUPPLICANT_DEFAULT_CONFIG "/tmp/wpa_supplicant.conf"
 #define CONFIG_PROVISON_MACADDR
 static const char *client_socket_dir = nullptr;
-static int debug = 1;
+static int debug;
 
 static int wifi_hal_nl_finish_handler(struct nl_msg *msg, void *arg)
 {
@@ -85,6 +85,33 @@ int wifi_hal_run_sys_cmd(char *cmd, char *resp_buf, int resp_size)
 
 	if (debug)
 		printf("sys cmd:%s resp:%s\n", cmd, resp_buf);
+
+	return 0;
+}
+
+static int wifi_hal_get_phyname(struct wifi_softc *sc, char *cmd, char *resp_buf, int resp_size)
+{
+	int ret;
+	unsigned int len;
+
+	sprintf(cmd, "iw dev %s info | grep wiphy | awk '{print $2}'", sc->nl_ctx.ifname);
+	ret = wifi_hal_run_sys_cmd(cmd, resp_buf, resp_size);
+	if (ret) {
+		printf("failed to get phyname\n");
+		return -1;
+	}
+
+	/* replace \n */
+	len = strlen(resp_buf);
+	if (len > 0 && resp_buf[len-1] == '\n') {
+		resp_buf[len-1] = '\0';
+	} else {
+		printf("fail with phyname\n");
+		return -1;
+	}
+
+	if (debug)
+		printf("phyname |%s|\n", resp_buf);
 
 	return 0;
 }
@@ -281,7 +308,7 @@ static int wifi_hal_register_nl_cb(struct wifi_softc *sc)
 	return 0;
 }
 
-static int wifi_hal_switch_channel(struct netlink_ctx *nl_ctx, char *channel,
+__attribute__((unused)) static int wifi_hal_switch_channel(struct netlink_ctx *nl_ctx, char *channel,
 		unsigned int count)
 {
 	static const struct {
@@ -661,10 +688,23 @@ static int wifi_hal_open(struct radio_context *ctx, enum radio_type type)
 
 	err = wifi_hal_get_interface(&sc->nl_ctx);
 
+	len = sizeof(cmd_buf) - 1;
+	ret = wifi_hal_get_phyname(sc, cmd_buf, resp_buf, len);
+	if (ret<0) {
+		printf("failed to get phy");
+		return -1;
+	} else {
+		if (strlen(resp_buf) < sizeof(sc->nl_ctx.phyname) - 1)
+			strncpy(sc->nl_ctx.phyname, resp_buf, sizeof(sc->nl_ctx.phyname));
+		else
+			return -1;
+		printf("phy_name: phy%s\n", sc->nl_ctx.phyname);
+	}
+
 	/* wifi interface name handling TODO for multiple wifi */
 	if (!err && !(int)sc->nl_ctx.ifname[0]) {
 		memset(cmd_buf, 0, 2048);
-		sprintf(cmd_buf, "iw phy phy0 interface add wlp1s0 type managed");
+		sprintf(cmd_buf, "iw phy phy%s interface add wlp1s0 type managed", sc->nl_ctx.phyname);
 		len = sizeof(cmd_buf) - 1;
 		ret = wifi_hal_run_sys_cmd(cmd_buf, resp_buf, len);
 		if (ret) {
@@ -884,20 +924,6 @@ static int wifi_hal_connect_ap(struct radio_context *ctx, char *ssid, char *psk)
 	return 0;
 }
 
-static int wifi_hal_get_phyname(struct wifi_softc *sc, char *cmd, char *resp_buf, int resp_size)
-{
-	int ret;
-
-	sprintf(cmd, "echo $(iw dev %s info | awk '/wiphy/ {printf \"phy\" $2}')", sc->nl_ctx.ifname);
-	ret = wifi_hal_run_sys_cmd(cmd, resp_buf, resp_size);
-	if (ret) {
-		printf("failed to kill supplicant\n");
-		return -1;
-	}
-
-	return 0;
-}
-
 static int wifi_hal_create_ap(struct radio_context *ctx, char *ssid, char *psk, char *freq)
 {
 	struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
@@ -1015,11 +1041,11 @@ static int wifi_hal_join_mesh(struct radio_context *ctx, char *ssid, char *psk, 
 	if (ret) {
 		printf("warning: sleep period not successfull\n");
 	}
-	wifi_hal_get_phyname(sc, cmd_buf, resp_buf, len);
+
 	if (strncmp(sc->nl_ctx.ifname, "mesh0", 5) != 0) {
 		memset(cmd_buf, 0, 2048);
-		/* To Do: fix phyname with resp buffer(TBD) */
-		sprintf(cmd_buf, "iw phy phy0 interface add mesh0 type mp");
+		/* To Do: fix phy_name with resp buffer(TBD) */
+		sprintf(cmd_buf, "iw phy phy%s interface add mesh0 type mp", sc->nl_ctx.phyname);
 		len = sizeof(cmd_buf) - 1;
 		ret = wifi_hal_run_sys_cmd(cmd_buf, resp_buf, (int)len);
 		if (ret) {
@@ -1059,7 +1085,7 @@ static int wifi_hal_join_mesh(struct radio_context *ctx, char *ssid, char *psk, 
 	sprintf(cmd_buf, "wpa_supplicant -dd -B -imesh0 -Dnl80211 -c%s -f /tmp/wpa_supplicant_11s.log", WPA_SUPPLICANT_DEFAULT_CONFIG);
 	len = sizeof(cmd_buf) - 1;
 	ret = system(cmd_buf);
-	//ret = execlp("wpa_supplicant", "wpa_supplicant", "-Dnl80211", "-B", "-imesh0", "-c/etc/wpa_supplicant/wpa_supplicant-mesh.conf", "-dd", NULL);
+	//ret = execlp("wpa_supplicant", "wpa_supplicant", "-Dnl80211", "-B", "-imesh0", "-c/etc/wpa_supplicant/wpa_supplicant-mesh.conf", "-dd", nullptr);
 	if (ret) {
 		printf("failed to start supplicant in mesh0 interface\n");
 		return -1;
@@ -1158,7 +1184,7 @@ static int wifi_hal_join_mesh(struct radio_context *ctx, char *ssid, char *psk, 
 	return 0;
 }
 
-static int wifi_hal_ctrl_recv(struct wpa_ctrl_ctx *ctx, int index, char *reply, size_t *reply_len)
+__attribute__((unused))static int wifi_hal_ctrl_recv(struct wpa_ctrl_ctx *ctx, int index, char *reply, size_t *reply_len)
 {
 	int res;
 	struct pollfd fds[2];
@@ -1193,7 +1219,7 @@ static int wifi_hal_ctrl_recv(struct wpa_ctrl_ctx *ctx, int index, char *reply, 
 	return 0;
 }
 
-static int wifi_hal_wait_on_event(struct wpa_ctrl_ctx *ctx, int index, char *buf, size_t buflen)
+__attribute__((unused)) static int wifi_hal_wait_on_event(struct wpa_ctrl_ctx *ctx, int index, char *buf, size_t buflen)
 {
 	size_t nread = buflen - 1;
 	int result;
@@ -1275,7 +1301,7 @@ static struct radio_generic_func wifi_hal_ops = {
 	.radio_join_mesh = wifi_hal_join_mesh,
 };
 
-int wifi_hal_register_ops(struct radio_context *ctx)
+__attribute__((unused)) int wifi_hal_register_ops(struct radio_context *ctx)
 {
 	ctx->cmn.rd_func = &wifi_hal_ops;
 
