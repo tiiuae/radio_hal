@@ -16,6 +16,7 @@ struct netlink_ctx {
 	int nl80211_id;
 	int ifindex;
 	char ifname[RADIO_IFNAME_SIZE];
+	char phyname[RADIO_PHYNAME_SIZE];
 	struct nl_cb *if_cb;
 	struct nl_cb *link_info_cb;
 	struct nl_cb *gen_nl_cb;
