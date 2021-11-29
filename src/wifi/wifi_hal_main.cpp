@@ -1,5 +1,5 @@
 #include <unistd.h>
-#include <stdint.h>
+#include <cstdint>
 #include "radio_hal.h"
 #include "wifi_hal.h"
 #include <netlink/attr.h>
@@ -23,7 +23,7 @@
 #define WIFI_HAL_WPA_SOCK_PATH "/var/run/wpa_supplicant/"
 #define WPA_SUPPLICANT_DEFAULT_CONFIG "/tmp/wpa_supplicant.conf"
 #define CONFIG_PROVISON_MACADDR
-static const char *client_socket_dir = NULL;
+static const char *client_socket_dir = nullptr;
 static int debug = 1;
 
 static int wifi_hal_nl_finish_handler(struct nl_msg *msg, void *arg)
@@ -57,7 +57,7 @@ int wifi_hal_run_sys_cmd(char *cmd, char *resp_buf, int resp_size)
 	int size=resp_size, resp_buf_bytes=0, readbytes=0;
     char *ret;
 
-	if((f = popen(cmd, "r")) == NULL) {
+	if((f = popen(cmd, "r")) == nullptr) {
 		printf("popen %s error\n", cmd);
 		return -1;
 	}
@@ -72,8 +72,8 @@ int wifi_hal_run_sys_cmd(char *cmd, char *resp_buf, int resp_size)
 		}
 
 		ret = fgets(buf,resp_buf_bytes,f);
-		readbytes = strlen(buf);
-		if (!readbytes || ret == NULL)
+		readbytes = (int)strlen(buf);
+		if (!readbytes || ret == nullptr)
 			break;
 
 		size -= readbytes;
@@ -136,7 +136,7 @@ int wifi_hal_frequency_to_channel(int freq)
 
 static void get_mac_addr(struct wifi_softc *sc, char *mac_addr)
 {
-	struct ifreq if_req;
+	struct ifreq if_req = {{0}};
 	int fd = socket(AF_INET, SOCK_DGRAM, 0);
 	unsigned char *mac;
 
@@ -160,14 +160,14 @@ static int wifi_hal_ifname_resp_hdlr(struct nl_msg *msg, void *arg)
 			NL80211_ATTR_MAX,
 			genlmsg_attrdata(hdr, 0),
 			genlmsg_attrlen(hdr, 0),
-			NULL);
+			nullptr);
 
 	if (tb_msg[NL80211_ATTR_IFNAME]) {
 		strcpy(nl_ctx->ifname, nla_get_string(tb_msg[NL80211_ATTR_IFNAME]));
 	}
 
 	if (tb_msg[NL80211_ATTR_IFINDEX]) {
-		(nl_ctx->ifindex = nla_get_u32(tb_msg[NL80211_ATTR_IFINDEX]));
+		(nl_ctx->ifindex = (int)nla_get_u32(tb_msg[NL80211_ATTR_IFINDEX]));
 	}
 
 
@@ -182,8 +182,8 @@ static int wifi_hal_connection_info_hdlr(struct nl_msg *msg, void *arg)
 	struct genlmsghdr *hdr = (struct genlmsghdr *)nlmsg_data(nlmsg_hdr(msg));
 	struct nlattr *sinfo[NL80211_STA_INFO_MAX + 1];
 	struct nlattr *rinfo[NL80211_RATE_INFO_MAX + 1];
-	static struct nla_policy sta_info[NL80211_STA_INFO_MAX + 1] = {0};
-	static struct nla_policy rate_info[NL80211_RATE_INFO_MAX + 1] = {0};
+	static struct nla_policy sta_info[NL80211_STA_INFO_MAX + 1] = {{0}};
+	static struct nla_policy rate_info[NL80211_RATE_INFO_MAX + 1] = {{0}};
 
 	sta_info[NL80211_STA_INFO_INACTIVE_TIME].type = NLA_U32;
 	sta_info[NL80211_STA_INFO_RX_BYTES].type = NLA_U32;
@@ -207,7 +207,7 @@ static int wifi_hal_connection_info_hdlr(struct nl_msg *msg, void *arg)
 			NL80211_ATTR_MAX,
 			genlmsg_attrdata(hdr, 0),
 			genlmsg_attrlen(hdr, 0),
-			NULL);
+			nullptr);
 
 	if (!tb_msg[NL80211_ATTR_STA_INFO]) {
 		printf("failed to parse sta info\n");
@@ -221,7 +221,7 @@ static int wifi_hal_connection_info_hdlr(struct nl_msg *msg, void *arg)
 	}
 
 	if (sinfo[NL80211_STA_INFO_SIGNAL]) {
-		sc->signal = (int8_t)nla_get_u8(sinfo[NL80211_STA_INFO_SIGNAL]);
+		sc->signal = (unsigned char)nla_get_u8(sinfo[NL80211_STA_INFO_SIGNAL]);
 	}
 
 	if (sinfo[NL80211_STA_INFO_TX_BITRATE])
@@ -314,7 +314,7 @@ static int wifi_hal_switch_channel(struct netlink_ctx *nl_ctx, char *channel,
 			NL80211_CMD_GET_STATION,
 			0);
 
-	chan = strtoul(channel, &end, 10);
+	chan = (int)strtoul(channel, &end, 10);
 	band = chan <= 14 ? NL80211_BAND_2GHZ : NL80211_BAND_5GHZ;
 	chan = wifi_hal_channel_to_frequency(chan, band);
 
@@ -387,7 +387,7 @@ static void wifi_hal_nl80211_dettach(struct wifi_softc *sc)
 int wifi_hal_nl80211_tx_frame(struct netlink_ctx *nl_ctx, void *action_frame, size_t len)
 {
 	char cmd = NL80211_CMD_FRAME;
-	struct nl_msg *nl_msg = NULL;
+	struct nl_msg *nl_msg = nullptr;
 	struct nl_cb *s_cb;
 	int err = -1;
 
@@ -591,14 +591,11 @@ static void wifi_hal_wpa_dettach(struct wifi_softc *sc)
 	wpa_ctrl_close(ctx->ctrl);
 }
 
-int create_default_wpa_config(void)
+int create_default_wpa_config()
 {
-	FILE *fd = NULL;
-	char fname[100] = {0};
+	FILE *fd;
 
-	snprintf(fname, sizeof(fname), WPA_SUPPLICANT_DEFAULT_CONFIG);
-
-	fd = fopen(fname, "w");
+	fd = fopen(WPA_SUPPLICANT_DEFAULT_CONFIG, "w");
 	if (!fd) {
 		return -ENOMEM;
 	}
@@ -738,7 +735,7 @@ static int wifi_hal_send_wpa_command(struct wpa_ctrl_ctx *ctx, int index, const 
 		return -1;
 	}
 
-	ret = wpa_ctrl_request(ctx->ctrl, cmd, strlen(cmd), resp, resp_size, NULL);
+	ret = wpa_ctrl_request(ctx->ctrl, cmd, strlen(cmd), resp, resp_size, nullptr);
 	if (ret == -2) {
 		printf("'%s' command timed out.\n", cmd);
 		return -2;
@@ -765,7 +762,7 @@ static int wifi_hal_send_wpa_mesh_command(struct wpa_ctrl_ctx *ctx, int index, c
 		return -1;
 	}
 
-	ret = wpa_ctrl_request(ctx->mesh_ctrl, cmd, strlen(cmd), resp, resp_size, NULL);
+	ret = wpa_ctrl_request(ctx->mesh_ctrl, cmd, strlen(cmd), resp, resp_size, nullptr);
 	if (ret == -2) {
 		printf("'%s' command timed out.\n", cmd);
 		return -2;
@@ -939,7 +936,7 @@ static int wifi_hal_create_ap(struct radio_context *ctx, char *ssid, char *psk, 
 		sprintf(cmd_buf, "SET_NETWORK %s mode 2", nw_id);
 		len = sizeof(cmd_buf) - 1;
 		ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
-		if (ret || !(strncmp(resp_buf, "OK", 2) == 0)) {
+		if (ret || strncmp(resp_buf, "OK", 2) != 0) {
 			printf("failed to set mesh mode\n");
 			return -1;
 		}
@@ -949,7 +946,7 @@ static int wifi_hal_create_ap(struct radio_context *ctx, char *ssid, char *psk, 
 	sprintf(cmd_buf, "SET_NETWORK %s ssid %s", nw_id, ssid);
 	len = sizeof(cmd_buf) - 1;
 	ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
-	if (ret || !(strncmp(resp_buf, "OK", 2) == 0)) {
+	if (ret || strncmp(resp_buf, "OK", 2) != 0) {
 		printf("failed to set mesh ssid\n");
 		return -1;
 	}
@@ -958,7 +955,7 @@ static int wifi_hal_create_ap(struct radio_context *ctx, char *ssid, char *psk, 
 	sprintf(cmd_buf, "SET_NETWORK %s frequency %s", nw_id, freq);
 	len = sizeof(cmd_buf) - 1;
 	ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
-	if (ret || !(strncmp(resp_buf, "OK", 2) == 0)) {
+	if (ret || strncmp(resp_buf, "OK", 2) != 0) {
 		printf("failed to set mesh freq\n");
 		return -1;
 	}
@@ -967,7 +964,7 @@ static int wifi_hal_create_ap(struct radio_context *ctx, char *ssid, char *psk, 
 	sprintf(cmd_buf, "SET_NETWORK %s key_mgmt WPA-PSK", nw_id);
 	len = sizeof(cmd_buf) - 1;
 	ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
-	if (ret || !(strncmp(resp_buf, "OK", 2) == 0)) {
+	if (ret || strncmp(resp_buf, "OK", 2) != 0) {
 		printf("failed to set mesh key mgmt\n");
 		return -1;
 	}
@@ -976,7 +973,7 @@ static int wifi_hal_create_ap(struct radio_context *ctx, char *ssid, char *psk, 
 	sprintf(cmd_buf, "SET_NETWORK %s psk %s", nw_id, psk);
 	len = sizeof(cmd_buf) - 1;
 	ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
-	if (ret || !(strncmp(resp_buf, "OK", 2) == 0)) {
+	if (ret || strncmp(resp_buf, "OK", 2) != 0) {
 		printf("failed to set mesh psk\n");
 		return -1;
 	}
@@ -986,7 +983,7 @@ static int wifi_hal_create_ap(struct radio_context *ctx, char *ssid, char *psk, 
 	len = sizeof(cmd_buf) - 1;
 	ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
 
-	if (ret || !(strncmp(resp_buf, "OK", 2) == 0)) {
+	if (ret || strncmp(resp_buf, "OK", 2) != 0) {
 			printf("failed to enable network\n");
 		return -1;
 	}
@@ -1024,7 +1021,7 @@ static int wifi_hal_join_mesh(struct radio_context *ctx, char *ssid, char *psk, 
 		/* To Do: fix phyname with resp buffer(TBD) */
 		sprintf(cmd_buf, "iw phy phy0 interface add mesh0 type mp");
 		len = sizeof(cmd_buf) - 1;
-		ret = wifi_hal_run_sys_cmd(cmd_buf, resp_buf, len);
+		ret = wifi_hal_run_sys_cmd(cmd_buf, resp_buf, (int)len);
 		if (ret) {
 			printf("failed to add mesh0 if\n");
 			return -1;
@@ -1035,7 +1032,7 @@ static int wifi_hal_join_mesh(struct radio_context *ctx, char *ssid, char *psk, 
 		memset(cmd_buf, 0, 2048);
 		sprintf(cmd_buf, "ifconfig mesh0 hw ether 00:11:22:33:44:55");
 		len = sizeof(cmd_buf) - 1;
-		ret = wifi_hal_run_sys_cmd(cmd_buf, resp_buf, len);
+		ret = wifi_hal_run_sys_cmd(cmd_buf, resp_buf, (int)len);
 		if (ret) {
 			printf("failed to set mac addr\n");
 			return -1;
@@ -1044,7 +1041,7 @@ static int wifi_hal_join_mesh(struct radio_context *ctx, char *ssid, char *psk, 
 		memset(cmd_buf, 0, 2048);
 		sprintf(cmd_buf, "ifconfig mesh0 up");
 		len = sizeof(cmd_buf) - 1;
-		ret = wifi_hal_run_sys_cmd(cmd_buf, resp_buf, len);
+		ret = wifi_hal_run_sys_cmd(cmd_buf, resp_buf, (int)len);
 		if (ret) {
 			printf("failed to up mesh0 if\n");
 			return -1;
@@ -1053,7 +1050,7 @@ static int wifi_hal_join_mesh(struct radio_context *ctx, char *ssid, char *psk, 
 
 	memset(cmd_buf, 0, 2048);
 	sprintf(cmd_buf, "rm /var/run/wpa_supplicant/mesh0");
-	ret = wifi_hal_run_sys_cmd(cmd_buf, resp_buf, len);
+	ret = wifi_hal_run_sys_cmd(cmd_buf, resp_buf, (int)len);
 	if (ret) {
 		printf("warning: failed to remove supplicant socket\n");
 	}
@@ -1107,7 +1104,7 @@ static int wifi_hal_join_mesh(struct radio_context *ctx, char *ssid, char *psk, 
 	sprintf(cmd_buf, "SET_NETWORK %s mode 5", nw_id);
 	len = sizeof(cmd_buf) - 1;
 	ret = wifi_hal_send_wpa_mesh_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
-	if (ret || !(strncmp(resp_buf, "OK", 2) == 0)) {
+	if (ret || strncmp(resp_buf, "OK", 2) != 0) {
 		printf("failed to set mesh mode\n");
 		return -1;
 	}
@@ -1116,7 +1113,7 @@ static int wifi_hal_join_mesh(struct radio_context *ctx, char *ssid, char *psk, 
 	sprintf(cmd_buf, "SET_NETWORK %s ssid %s", nw_id, ssid);
 	len = sizeof(cmd_buf) - 1;
 	ret = wifi_hal_send_wpa_mesh_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
-	if (ret || !(strncmp(resp_buf, "OK", 2) == 0)) {
+	if (ret || strncmp(resp_buf, "OK", 2) != 0) {
 		printf("failed to set mesh ssid\n");
 		return -1;
 	}
@@ -1125,7 +1122,7 @@ static int wifi_hal_join_mesh(struct radio_context *ctx, char *ssid, char *psk, 
 	sprintf(cmd_buf, "SET_NETWORK %s frequency %s", nw_id, freq);
 	len = sizeof(cmd_buf) - 1;
 	ret = wifi_hal_send_wpa_mesh_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
-	if (ret || !(strncmp(resp_buf, "OK", 2) == 0)) {
+	if (ret || strncmp(resp_buf, "OK", 2) != 0) {
 		printf("failed to set mesh freq\n");
 		return -1;
 	}
@@ -1134,7 +1131,7 @@ static int wifi_hal_join_mesh(struct radio_context *ctx, char *ssid, char *psk, 
 	sprintf(cmd_buf, "SET_NETWORK %s key_mgmt SAE", nw_id);
 	len = sizeof(cmd_buf) - 1;
 	ret = wifi_hal_send_wpa_mesh_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
-	if (ret || !(strncmp(resp_buf, "OK", 2) == 0)) {
+	if (ret || strncmp(resp_buf, "OK", 2) != 0) {
 		printf("failed to set mesh key mgmt\n");
 		return -1;
 	}
@@ -1143,7 +1140,7 @@ static int wifi_hal_join_mesh(struct radio_context *ctx, char *ssid, char *psk, 
 	sprintf(cmd_buf, "SET_NETWORK %s psk %s", nw_id, psk);
 	len = sizeof(cmd_buf) - 1;
 	ret = wifi_hal_send_wpa_mesh_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
-	if (ret || !(strncmp(resp_buf, "OK", 2) == 0)) {
+	if (ret || strncmp(resp_buf, "OK", 2) != 0) {
 		printf("failed to set mesh psk\n");
 		return -1;
 	}
@@ -1152,7 +1149,7 @@ static int wifi_hal_join_mesh(struct radio_context *ctx, char *ssid, char *psk, 
 	sprintf(cmd_buf, "MESH_GROUP_ADD %s", nw_id);
 	len = sizeof(cmd_buf) - 1;
 	ret = wifi_hal_send_wpa_mesh_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
-	if (ret || !(strncmp(resp_buf, "OK", 2) == 0)) {
+	if (ret || strncmp(resp_buf, "OK", 2) != 0) {
 		printf("failed to enable mesh0\n");
 		return -1;
 	}
@@ -1206,7 +1203,7 @@ static int wifi_hal_wait_on_event(struct wpa_ctrl_ctx *ctx, int index, char *buf
 		printf("monitor Connection not opened\n");
 		strncpy(buf, WPA_EVENT_TERMINATING " - connection closed", buflen-1);
 		buf[buflen-1] = '\0';
-		return strlen(buf);
+		return (int)strlen(buf);
 	}
 
 	/* To DO: Pass valid index during concurency */
@@ -1215,7 +1212,7 @@ static int wifi_hal_wait_on_event(struct wpa_ctrl_ctx *ctx, int index, char *buf
 		printf("wifi_ctrl_recv failed: %s\n", strerror(errno));
 		strncpy(buf, WPA_EVENT_TERMINATING " - recv error", buflen-1);
 		buf[buflen-1] = '\0';
-		return strlen(buf);
+		return (int)strlen(buf);
 	}
 
 	buf[nread] = '\0';
@@ -1225,18 +1222,18 @@ static int wifi_hal_wait_on_event(struct wpa_ctrl_ctx *ctx, int index, char *buf
 		printf("got EOF on monitor socket\n");
 		strncpy(buf, WPA_EVENT_TERMINATING " - signal 0 received", buflen-1);
 		buf[buflen-1] = '\0';
-		return strlen(buf);
+		return (int)strlen(buf);
 	}
 	/* strip verbose info from event */
 	if (buf[0] == '<') {
 		char *match = strchr(buf, '>');
-		if (match != NULL) {
+		if (match != nullptr) {
 			nread -= (match+1-buf);
 			memmove(buf, match+1, nread+1);
 		}
 	}
 
-	return nread;
+	return (int)nread;
 }
 
 
@@ -1255,19 +1252,19 @@ static struct radio_generic_func wifi_hal_ops = {
 	.open = wifi_hal_open,
 	.close = wifi_hal_close,
 	.radio_get_hal_version = wifi_hal_get_hal_version,
-	.radio_initialize = NULL,
-	.radio_wait_for_driver_ready = NULL,
-	.radio_cleanup = NULL,
-	.radio_event_loop = NULL,
-	.radio_create_config = NULL,
-	.radio_enable = NULL,
-	.get_no_of_radio = NULL,
+	.radio_initialize = nullptr,
+	.radio_wait_for_driver_ready = nullptr,
+	.radio_cleanup = nullptr,
+	.radio_event_loop = nullptr,
+	.radio_create_config = nullptr,
+	.radio_enable = nullptr,
+	.get_no_of_radio = nullptr,
 	.radio_get_iface_name = wifi_hal_get_iface_name,
-	.radio_get_supported_freq_band = NULL,
-	.radio_get_status = NULL,
-	.radio_get_feature_status = NULL,
-	.radio_get_supported_channels = NULL,
-	.radio_get_operating_channel = NULL,
+	.radio_get_supported_freq_band = nullptr,
+	.radio_get_status = nullptr,
+	.radio_get_feature_status = nullptr,
+	.radio_get_supported_channels = nullptr,
+	.radio_get_operating_channel = nullptr,
 	.radio_get_mac_address = wifi_hal_get_mac_addr,
 	.radio_get_rssi = wifi_hal_get_rssi,
 	.radio_get_txrate = wifi_hal_get_txrate,
@@ -1287,14 +1284,14 @@ int wifi_hal_register_ops(struct radio_context *ctx)
 
 struct radio_context*  wifi_hal_attach()
 {
-	struct radio_context *ctx = NULL;
-	struct wifi_softc *sc = NULL;
+	struct radio_context *ctx = nullptr;
+	struct wifi_softc *sc = nullptr;
 	int err = 0;
 
 	ctx = (struct radio_context *)malloc(sizeof(struct radio_context));
 	if (!ctx) {
 		printf("failed to allocate radio hal ctx\n");
-		return NULL;
+		return nullptr;
 	}
 	sc = (struct wifi_softc *)malloc(sizeof(struct wifi_softc));
 	if (!sc) {
@@ -1326,7 +1323,7 @@ nl_attach_failure:
 	free(sc);
 sc_alloc_failure:
 	free(ctx);
-	return NULL;
+	return nullptr;
 }
 
 int wifi_hal_dettach(struct radio_context *ctx)

@@ -1,5 +1,5 @@
-#include <stdio.h>
-#include <string.h>
+#include <cstdio>
+#include <cstring>
 #include <getopt.h>
 #include "radio_hal.h"
 #include "wifi_hal.h"
@@ -8,7 +8,7 @@
 
 struct radio_context* radio_hal_attach(enum radio_type type)
 {
-	struct radio_context *ctx = NULL;
+	struct radio_context *ctx = nullptr;
 	/* int err = 0; TODO */
 
 	switch(type)
@@ -120,13 +120,13 @@ int main(int argc, char *argv[])
 	int c;
 	const char *short_opt = "w::b::z::h::";
 	int long_opt_ptr;
-	struct radio_context *ctx = NULL;
+	struct radio_context *ctx = nullptr;
 	struct option long_opt[] =
 	{
-		{"wifi", required_argument,0, 'w'},
-		{"bt", required_argument,0, 'b'},
-		{"Zigbee", required_argument,0, 'z'},
-		{"help", optional_argument,0, 'h'}
+		{"wifi", required_argument,nullptr, 'w'},
+		{"bt", required_argument,nullptr, 'b'},
+		{"Zigbee", required_argument,nullptr, 'z'},
+		{"help", optional_argument,nullptr, 'h'}
 	};
 
 	printf("*  argc = %d argv = %s %s\n",argc,argv[0], argv[2]);
@@ -154,6 +154,9 @@ int main(int argc, char *argv[])
 				break;
 			case 'h':
 				show_radio_hal_help();
+				return(0);
+			default:
+				printf("Argument not supported: %c\n", c);
 				return(0);
 		}
 	}
