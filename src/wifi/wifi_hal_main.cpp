@@ -640,7 +640,7 @@ int create_default_wpa_config()
 	return 0;
 }
 
-int prepare_cmd_buf(char *buf, size_t len, char *fmt, ...)
+static int prepare_cmd_buf(char *buf, size_t len, char *fmt, ...)
 {
 	va_list args;
 
