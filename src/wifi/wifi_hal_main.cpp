@@ -306,14 +306,14 @@ static int wifi_hal_register_nl_cb(struct wifi_softc *sc)
 	if (!nl_ctx->if_cb)
 	{
 		printf("failed to allocate if NL callback.\n");
-		return -ENOMEM;
+		goto error;
 	}
 
 	nl_ctx->link_info_cb = nl_cb_alloc(NL_CB_DEFAULT);
 	if (!nl_ctx->link_info_cb)
 	{
 		printf("failed to allocate link info NL callback.\n");
-		return -ENOMEM;
+		goto error;
 	}
 
 	nl_cb_set(nl_ctx->if_cb, NL_CB_VALID , NL_CB_CUSTOM, wifi_hal_ifname_resp_hdlr, sc);
@@ -322,6 +322,11 @@ static int wifi_hal_register_nl_cb(struct wifi_softc *sc)
 	nl_cb_set(nl_ctx->link_info_cb, NL_CB_FINISH, NL_CB_CUSTOM, wifi_hal_nl_finish_handler, &(nl_ctx->linkinfo_cb_err));
 
 	return 0;
+
+error:
+	nl_cb_put(nl_ctx->if_cb );
+	nl_cb_put(nl_ctx->link_info_cb);
+	return -ENOMEM;
 }
 
 __attribute__((unused)) static int wifi_hal_switch_channel(struct netlink_ctx *nl_ctx, char *channel,
@@ -425,6 +430,8 @@ static void wifi_hal_nl80211_dettach(struct wifi_softc *sc)
 {
 	struct netlink_ctx *nl_ctx = &sc->nl_ctx;
 	nl_socket_free(nl_ctx->sock);
+	nl_cb_put(nl_ctx->if_cb );
+	nl_cb_put(nl_ctx->link_info_cb);
 }
 
 __attribute__((unused)) int wifi_hal_nl80211_tx_frame(struct netlink_ctx *nl_ctx, void *action_frame, size_t len)
@@ -600,6 +607,9 @@ static int wifi_hal_wpa_attach(struct wifi_softc *sc)
 	char sock_path[64] = {0};
 	int len = 0;
 
+	/* Initialise even not used */
+	ctx->mesh_ctrl = (wpa_ctrl *)0;
+
 	len += sprintf(sock_path, WIFI_HAL_WPA_SOCK_PATH);
 	len += sprintf(sock_path + len, "%s", (const char *)(sc->nl_ctx.ifname));
 	ctx->ctrl = wpa_ctrl_open2(sock_path, client_socket_dir);
@@ -632,6 +642,7 @@ static void wifi_hal_wpa_dettach(struct wifi_softc *sc)
 
 	wpa_ctrl_close(ctx->monitor);
 	wpa_ctrl_close(ctx->ctrl);
+	wpa_ctrl_close(ctx->mesh_ctrl);
 }
 
 int create_default_wpa_config()
