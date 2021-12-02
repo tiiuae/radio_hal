@@ -28,8 +28,8 @@ endif
 
 
 ifndef CFLAGS
-CFLAGS = -MMD -O2 -Wall -g -fPIC -I$(INC_DIR) -I$(SRC_DIR)/$(WIFI_HAL_DIR) -I$(SRC_DIR)/$(WIFI_HAL_DIR)/$(WPA_CTL_DIR)/ -I/usr/include/libnl3/ -std=${CSTD}
-CXXFLAGS = -MMD -O2 -Wall -g -fPIC -I$(INC_DIR) -I$(SRC_DIR)/$(WIFI_HAL_DIR) -I$(SRC_DIR)/$(WIFI_HAL_DIR)/$(WPA_CTL_DIR)/ -I/usr/include/libnl3/ -std=${CXXSTD}
+CFLAGS = -MMD -O2 -Wall -Werror -g -fPIC -I$(INC_DIR) -I$(SRC_DIR)/$(WIFI_HAL_DIR) -I$(SRC_DIR)/$(WIFI_HAL_DIR)/$(WPA_CTL_DIR)/ -I/usr/include/libnl3/ -std=${CSTD}
+CXXFLAGS = -MMD -O2 -Wall -Werror -g -fPIC -I$(INC_DIR) -I$(SRC_DIR)/$(WIFI_HAL_DIR) -I$(SRC_DIR)/$(WIFI_HAL_DIR)/$(WPA_CTL_DIR)/ -I/usr/include/libnl3/ -std=${CXXSTD}
 endif
 
 LDFLAGS=$(shell pkg-config --libs libnl-3.0 libnl-genl-3.0)
@@ -40,11 +40,11 @@ ${ALL}: $(OBJ)
 
 %.o: %.cpp
 	$(CXX) -c -fPIC  $(CXXFLAGS) ${COPTS} $< -o $@
-	echo " CXX " $<
+	@echo " CXX " $<
 
 %.o: %.c
 	$(CC) -c -fPIC  $(CFLAGS) ${COPTS} $< -o $@
-	echo " CC " $<
+	@echo " CC " $<
 
 
 libradio_hal.so: $(OBJ)

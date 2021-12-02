@@ -1,5 +1,6 @@
 #include <unistd.h>
 #include <cstdint>
+#include <cstdarg>
 #include "radio_hal.h"
 #include "wifi_hal.h"
 #include <netlink/attr.h>
@@ -20,9 +21,15 @@
 
 #define WIFI_RADIO_HAL_MAJOR_VERSION 1
 #define WIFI_RADIO_HAL_MINOR_VERSION 0
-#define WIFI_HAL_WPA_SOCK_PATH "/var/run/wpa_supplicant/"
-#define WPA_SUPPLICANT_DEFAULT_CONFIG "/tmp/wpa_supplicant.conf"
-#define CONFIG_PROVISON_MACADDR
+
+#define WIFI_HAL_WPA_SOCK_PATH (const char *) "/var/run/wpa_supplicant/"
+#define WPA_SUPPLICANT_DEFAULT_CONFIG (const char *)"/tmp/wpa_supplicant.conf"
+
+#define CMD_BUFFER_SIZE sizeof(char) * 2048
+#define RESP_BUFFER_SIZE sizeof(char) * 2048
+
+#define CONFIG_PROVISION_MACADDR
+
 static const char *client_socket_dir = nullptr;
 static int debug;
 
@@ -54,7 +61,7 @@ int wifi_hal_run_sys_cmd(char *cmd, char *resp_buf, int resp_size)
 {
 	FILE *f;
 	char *buf = resp_buf;
-	int size=resp_size, resp_buf_bytes=0, readbytes=0;
+	int size=resp_size, resp_buf_bytes, readbytes;
     char *ret;
 
 	if((f = popen(cmd, "r")) == nullptr) {
@@ -89,10 +96,22 @@ int wifi_hal_run_sys_cmd(char *cmd, char *resp_buf, int resp_size)
 	return 0;
 }
 
+static int replace_line_change(char *buf, size_t size) {
+	int len;
+
+	len = strnlen(buf, size);
+	if (len > 0 && (buf[len-1] == '\n'|| buf[len-1] == '\0') ) {
+		buf[len-1] = '\0';
+	} else {
+		printf("fail to find line change \n");
+		return -1;
+	}
+	return 0;
+}
+
 static int wifi_hal_get_phyname(struct wifi_softc *sc, char *cmd, char *resp_buf, int resp_size)
 {
 	int ret;
-	unsigned int len;
 
 	sprintf(cmd, "iw dev %s info | grep wiphy | awk '{print $2}'", sc->nl_ctx.ifname);
 	ret = wifi_hal_run_sys_cmd(cmd, resp_buf, resp_size);
@@ -101,11 +120,8 @@ static int wifi_hal_get_phyname(struct wifi_softc *sc, char *cmd, char *resp_buf
 		return -1;
 	}
 
-	/* replace \n */
-	len = strlen(resp_buf);
-	if (len > 0 && resp_buf[len-1] == '\n') {
-		resp_buf[len-1] = '\0';
-	} else {
+	ret = replace_line_change(resp_buf, (size_t)resp_size);
+	if (ret<0) {
 		printf("fail with phyname\n");
 		return -1;
 	}
@@ -145,7 +161,7 @@ int wifi_hal_channel_to_frequency(int chan, enum nl80211_band band)
 	return 0;
 }
 
-int wifi_hal_frequency_to_channel(int freq)
+__attribute__((unused)) int wifi_hal_frequency_to_channel(int freq)
 {
 	if (freq == 2484)
 		return 14;
@@ -411,7 +427,7 @@ static void wifi_hal_nl80211_dettach(struct wifi_softc *sc)
 	nl_socket_free(nl_ctx->sock);
 }
 
-int wifi_hal_nl80211_tx_frame(struct netlink_ctx *nl_ctx, void *action_frame, size_t len)
+__attribute__((unused)) int wifi_hal_nl80211_tx_frame(struct netlink_ctx *nl_ctx, void *action_frame, size_t len)
 {
 	char cmd = NL80211_CMD_FRAME;
 	struct nl_msg *nl_msg = nullptr;
@@ -633,11 +649,27 @@ int create_default_wpa_config()
 	return 0;
 }
 
+static int prepare_cmd_buf(char *buf, size_t len, const char *fmt, ...)
+{
+	va_list args;
+
+	if (buf != nullptr && fmt != nullptr) {
+		memset(buf, 0, len - 1);
+		va_start (args, fmt);
+		vsnprintf(buf, len, fmt, args);
+		va_end (args);
+	} else
+		return -1;
+
+	return 0;
+}
+
 static int wifi_hal_start_wpa_dummy_config(struct radio_context *ctx, int radio_index)
 {
-	char cmd_buf[2048] = {0};
-	char resp_buf[2048] = {0};
-	int ret = 0, len = 0;
+	char cmd_buf[CMD_BUFFER_SIZE] = {0};
+	char resp_buf[RESP_BUFFER_SIZE] = {0};
+	int ret = 0;
+	int len = sizeof(resp_buf) - 1;
 
 	struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
 
@@ -647,9 +679,7 @@ static int wifi_hal_start_wpa_dummy_config(struct radio_context *ctx, int radio_
 		return -1;
 	}
 
-	memset(cmd_buf, 0, 2048);
-	sprintf(cmd_buf, "iw dev mesh0 del");
-	len = sizeof(cmd_buf) - 1;
+	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "iw dev mesh0 del 2>/dev/null");
 	ret = wifi_hal_run_sys_cmd(cmd_buf, resp_buf, len);
 	if (ret) {
 		printf("warning: failed to delete stale mesh interface\n");
@@ -660,17 +690,15 @@ static int wifi_hal_start_wpa_dummy_config(struct radio_context *ctx, int radio_
 		printf("warning: failed to pkill wpa_supplicant\n");
 	}
 
-	memset(cmd_buf, 0, 2048);
-	sprintf(cmd_buf, "rm /var/run/wpa_supplicant/%s", sc->nl_ctx.ifname);
-	len = sizeof(cmd_buf) - 1;
+	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "rm /var/run/wpa_supplicant/%s 2>/dev/null", sc->nl_ctx.ifname);
 	ret = wifi_hal_run_sys_cmd(cmd_buf, resp_buf, len);
 	if (ret) {
 		printf("warning: failed to delete default ctrl interface\n");
 	}
 
-	memset(cmd_buf, 0, 2048);
-	snprintf(cmd_buf, sizeof(cmd_buf), "wpa_supplicant -dd -Dnl80211 -B -i%s -c%s -f /tmp/wpa_default.log ", sc->nl_ctx.ifname, WPA_SUPPLICANT_DEFAULT_CONFIG);
-
+	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf),
+					(const char*) "wpa_supplicant -dd -Dnl80211 -B -i%s -c%s -f /tmp/wpa_default.log ", sc->nl_ctx.ifname,
+					WPA_SUPPLICANT_DEFAULT_CONFIG);
 	ret = system(cmd_buf);
 	if (ret) {
 		printf("failed to start supplicant with default conf\n");
@@ -682,14 +710,13 @@ static int wifi_hal_start_wpa_dummy_config(struct radio_context *ctx, int radio_
 static int wifi_hal_open(struct radio_context *ctx, enum radio_type type)
 {
 	struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
-	int err = 0, ret = 0, len = 0;
-	char cmd_buf[2048] = {0};
-	char resp_buf[2048] = {0};
+	char cmd_buf[CMD_BUFFER_SIZE] = {0};
+	char resp_buf[RESP_BUFFER_SIZE] = {0};
+	int err = 0, ret = 0, len = sizeof(cmd_buf)-1;
 
 	err = wifi_hal_get_interface(&sc->nl_ctx);
 
-	len = sizeof(cmd_buf) - 1;
-	ret = wifi_hal_get_phyname(sc, cmd_buf, resp_buf, len);
+	ret = wifi_hal_get_phyname(sc, cmd_buf, resp_buf, sizeof(resp_buf));
 	if (ret<0) {
 		printf("failed to get phy");
 		return -1;
@@ -703,9 +730,8 @@ static int wifi_hal_open(struct radio_context *ctx, enum radio_type type)
 
 	/* wifi interface name handling TODO for multiple wifi */
 	if (!err && !(int)sc->nl_ctx.ifname[0]) {
-		memset(cmd_buf, 0, 2048);
-		sprintf(cmd_buf, "iw phy phy%s interface add wlp1s0 type managed", sc->nl_ctx.phyname);
-		len = sizeof(cmd_buf) - 1;
+		prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "iw phy phy%s interface add wlp1s0 type managed",
+						sc->nl_ctx.phyname);
 		ret = wifi_hal_run_sys_cmd(cmd_buf, resp_buf, len);
 		if (ret) {
 			printf("failed to add wlp1s0\n");
@@ -713,9 +739,7 @@ static int wifi_hal_open(struct radio_context *ctx, enum radio_type type)
 		}
 		err = wifi_hal_get_interface(&sc->nl_ctx);
 	} else if (strncmp(sc->nl_ctx.ifname, "mesh0", 5) == 0) {
-		memset(cmd_buf, 0, 2048);
-		sprintf(cmd_buf, "iw dev %s del", sc->nl_ctx.ifname);
-		len = sizeof(cmd_buf) - 1;
+		prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "iw dev %s del", sc->nl_ctx.ifname);
 		ret = wifi_hal_run_sys_cmd(cmd_buf, resp_buf, len);
 		if (ret) {
 			printf("failed to delete default managed interface\n");
@@ -802,7 +826,7 @@ static int wifi_hal_send_wpa_mesh_command(struct wpa_ctrl_ctx *ctx, int index, c
 		return -1;
 	}
 
-	ret = wpa_ctrl_request(ctx->mesh_ctrl, cmd, strlen(cmd), resp, resp_size, nullptr);
+	ret = wpa_ctrl_request(ctx->mesh_ctrl, cmd, strlen(cmd), resp, (size_t *)resp_size, nullptr);
 	if (ret == -2) {
 		printf("'%s' command timed out.\n", cmd);
 		return -2;
@@ -822,7 +846,7 @@ static int wifi_hal_send_wpa_mesh_command(struct wpa_ctrl_ctx *ctx, int index, c
 
 static int wifi_hal_trigger_scan(struct wifi_softc *sc)
 {
-	char buf[2048];
+	char buf[CMD_BUFFER_SIZE];
 	size_t len = 0;
 
 	len = sizeof(buf) - 1;
@@ -853,45 +877,41 @@ static int wifi_hal_get_scan_results(struct radio_context *ctx, char *results)
 static int wifi_hal_connect_ap(struct radio_context *ctx, char *ssid, char *psk)
 {
 	struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
-	char cmd_buf[2048] = {0};
-	char resp_buf[2048] = {0};
+	char cmd_buf[CMD_BUFFER_SIZE] = {0};
+	char resp_buf[RESP_BUFFER_SIZE] = {0};
 	char nw_id[6] = {0};
-	size_t len = 0;
+	size_t len = sizeof(resp_buf) - 1;
 	int ret = 0;
 
-	len = sizeof(cmd_buf) - 1;
-	strcpy(cmd_buf, "REMOVE_NETWORK all");
-
+	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "REMOVE_NETWORK all");
 	ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
 	if (ret < 0) {
 		printf("Fail to remove existing NW\n");
 		return ret;
 	}
 
-	memset(cmd_buf, 0, 2048);
-	len = sizeof(cmd_buf) - 1;
-	strcpy(cmd_buf, "ADD_NETWORK");
-
+	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "ADD_NETWORK");
 	ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
 	if (ret < 0) {
         printf("Fail to add NW\n");
         return ret;
-	} else {
-		if (strlen(resp_buf) < sizeof(nw_id) - 1)
+	} else { /* TODO own function? */
+		if (strlen(resp_buf) < sizeof(nw_id) - 1) {
 			strncpy(nw_id, resp_buf, sizeof(nw_id));
-		else
+			if (replace_line_change(nw_id, sizeof(nw_id)) < 0){
+				printf("Failed to get NWID\n");
+				return -1;
+			}
+		} else
 			return -1;
-		printf("NW ID:%s\n", nw_id);
+		printf("NWID %s\n", nw_id);
 	}
 
-	memset(cmd_buf, 0, 2048);
-	len = 0;
-	strcat(cmd_buf, "SET_NETWORK ");
+	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "SET_NETWORK ");
 	strncat(cmd_buf, nw_id, strlen(nw_id) - 1 + strlen(cmd_buf) < sizeof(cmd_buf) ? strlen(nw_id) - 1 : 0);
 	strcat(cmd_buf, " ssid ");
 	strncat(cmd_buf, ssid, strlen(ssid) + strlen(cmd_buf) < sizeof(cmd_buf) ? strlen(ssid) : 0);
-	printf("CMD:%s\n", cmd_buf);
-	len = sizeof(cmd_buf) - 1;
+
 	wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
 	if (ret < 0) {
 		printf("Fail to add NW\n");
@@ -900,20 +920,14 @@ static int wifi_hal_connect_ap(struct radio_context *ctx, char *ssid, char *psk)
 
 	if (len) {
 		if (strncmp(resp_buf, "OK", 2) == 0) {
-			memset(cmd_buf, 0, 2048);
-			snprintf(cmd_buf, 2048, "%s%s%s%s", "SET_NETWORK ", nw_id, " psk ", psk);
-			printf("CMD:%s\n", cmd_buf);
-			len = sizeof(cmd_buf) - 1;
+			prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "%s%s%s%s", "SET_NETWORK ", nw_id, " psk ", psk);
 			wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
 		} else {
 			printf("failed to set psk\n");
 			return -1;
 		}
 		if (strncmp(resp_buf, "OK", 2) == 0) {
-			memset(cmd_buf, 0, 2048);
-			snprintf(cmd_buf, 2048, "%s%s", "ENABLE_NETWORK ", nw_id);
-			printf("CMD:%s\n", cmd_buf);
-			len = sizeof(cmd_buf) - 1;
+			prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "%s%s", "ENABLE_NETWORK ", nw_id);
 			wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
 		} else {
 			printf("failed to enable network\n");
@@ -927,86 +941,73 @@ static int wifi_hal_connect_ap(struct radio_context *ctx, char *ssid, char *psk)
 static int wifi_hal_create_ap(struct radio_context *ctx, char *ssid, char *psk, char *freq)
 {
 	struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
-	char cmd_buf[2048] = {0};
-	char resp_buf[2048] = {0};
+	char cmd_buf[CMD_BUFFER_SIZE] = {0};
+	char resp_buf[RESP_BUFFER_SIZE] = {0};
 	char nw_id[6] = {0};
-	size_t len = 0;
+	size_t len = sizeof(resp_buf) - 1;
 	int ret = 0;
 
-	len = sizeof(cmd_buf) - 1;
-	strcpy(cmd_buf, "REMOVE_NETWORK all");
 
+	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "REMOVE_NETWORK all");
 	ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
 	if (ret < 0) {
 		printf("Fail to remove existing NW\n");
 		return ret;
 	}
 
-	memset(cmd_buf, 0, 2048);
-	len = sizeof(cmd_buf) - 1;
-	strcpy(cmd_buf, "ADD_NETWORK");
+	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "ADD_NETWORK");
 	ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
 	if (ret < 0) {
 		printf("Fail to add NW\n");
 		return ret;
-	} else {
-		if (strlen(resp_buf) < sizeof(nw_id) - 1)
+	} else { /* TODO own function? */
+		if (strlen(resp_buf) < sizeof(nw_id) - 1) {
 			strncpy(nw_id, resp_buf, sizeof(nw_id));
-		else
+			if (replace_line_change(nw_id, sizeof(nw_id)) < 0){
+				printf("Failed to get NWID\n");
+				return -1;
+			}
+		} else
 			return -1;
-		printf("NW ID:%s\n", nw_id);
+		printf("NWID %s\n", nw_id);
 	}
 
-	if (len) {
-		memset(cmd_buf, 0, 2048);
-		sprintf(cmd_buf, "SET_NETWORK %s mode 2", nw_id);
-		len = sizeof(cmd_buf) - 1;
-		ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
-		if (ret || strncmp(resp_buf, "OK", 2) != 0) {
-			printf("failed to set mesh mode\n");
-			return -1;
-		}
+	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "SET_NETWORK %s mode 2", nw_id);
+	ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
+	if (ret || strncmp(resp_buf, "OK", 2) != 0) {
+		printf("failed to set mesh mode\n");
+		return -1;
 	}
 
-	memset(cmd_buf, 0, 2048);
-	sprintf(cmd_buf, "SET_NETWORK %s ssid %s", nw_id, ssid);
-	len = sizeof(cmd_buf) - 1;
+	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "SET_NETWORK %s ssid %s", nw_id, ssid);
 	ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
 	if (ret || strncmp(resp_buf, "OK", 2) != 0) {
 		printf("failed to set mesh ssid\n");
 		return -1;
 	}
 
-	memset(cmd_buf, 0, 2048);
-	sprintf(cmd_buf, "SET_NETWORK %s frequency %s", nw_id, freq);
-	len = sizeof(cmd_buf) - 1;
+	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "SET_NETWORK %s frequency %s", nw_id, freq);
 	ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
 	if (ret || strncmp(resp_buf, "OK", 2) != 0) {
 		printf("failed to set mesh freq\n");
 		return -1;
 	}
 
-	memset(cmd_buf, 0, 2048);
-	sprintf(cmd_buf, "SET_NETWORK %s key_mgmt WPA-PSK", nw_id);
-	len = sizeof(cmd_buf) - 1;
+	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "SET_NETWORK %s key_mgmt WPA-PSK", nw_id);
 	ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
 	if (ret || strncmp(resp_buf, "OK", 2) != 0) {
 		printf("failed to set mesh key mgmt\n");
 		return -1;
 	}
 
-	memset(cmd_buf, 0, 2048);
-	sprintf(cmd_buf, "SET_NETWORK %s psk %s", nw_id, psk);
-	len = sizeof(cmd_buf) - 1;
+	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "SET_NETWORK %s psk %s", nw_id, psk);
 	ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
 	if (ret || strncmp(resp_buf, "OK", 2) != 0) {
 		printf("failed to set mesh psk\n");
 		return -1;
 	}
 
-	memset(cmd_buf, 0, 2048);
-	sprintf(cmd_buf, "%s%s", "ENABLE_NETWORK ", nw_id);
-	len = sizeof(cmd_buf) - 1;
+	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "ENABLE_NETWORK %s", nw_id);
 	ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
 
 	if (ret || strncmp(resp_buf, "OK", 2) != 0) {
@@ -1020,17 +1021,16 @@ static int wifi_hal_create_ap(struct radio_context *ctx, char *ssid, char *psk, 
 static int wifi_hal_join_mesh(struct radio_context *ctx, char *ssid, char *psk, char *freq)
 {
 	struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
-	char cmd_buf[2048] = {0};
-	char resp_buf[2048] = {0};
+	char cmd_buf[CMD_BUFFER_SIZE] = {0};
+	char resp_buf[RESP_BUFFER_SIZE] = {0};
 	char nw_id[6] = {0};
-	size_t len = 0;
+	size_t len = sizeof(resp_buf) - 1;
 	int ret = 0;
 
 	/* To do: Back up  AP config and Add support for SAP + MESH later */
 
 	/* restart wpa_supplicant on mesh interface */
-	memset(cmd_buf, 0, 2048);
-	sprintf(cmd_buf, "killall wpa_supplicant");
+	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "killall wpa_supplicant");
 	ret = system(cmd_buf);
 	if (ret) {
 		printf("failed to kill supplicant\n");
@@ -1043,30 +1043,24 @@ static int wifi_hal_join_mesh(struct radio_context *ctx, char *ssid, char *psk, 
 	}
 
 	if (strncmp(sc->nl_ctx.ifname, "mesh0", 5) != 0) {
-		memset(cmd_buf, 0, 2048);
-		/* To Do: fix phy_name with resp buffer(TBD) */
-		sprintf(cmd_buf, "iw phy phy%s interface add mesh0 type mp", sc->nl_ctx.phyname);
-		len = sizeof(cmd_buf) - 1;
+		prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "iw phy phy%s interface add mesh0 type mp",
+						sc->nl_ctx.phyname);
 		ret = wifi_hal_run_sys_cmd(cmd_buf, resp_buf, (int)len);
 		if (ret) {
 			printf("failed to add mesh0 if\n");
 			return -1;
 		}
 
-#ifdef CONFIG_PROVISON_MACADDR
+#ifdef CONFIG_PROVISION_MACADDR
 		/* To Do: Check if we need to provison later with SAP + STA */
-		memset(cmd_buf, 0, 2048);
-		sprintf(cmd_buf, "ifconfig mesh0 hw ether 00:11:22:33:44:55");
-		len = sizeof(cmd_buf) - 1;
+		prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "ifconfig mesh0 hw ether 00:11:22:33:44:55");
 		ret = wifi_hal_run_sys_cmd(cmd_buf, resp_buf, (int)len);
 		if (ret) {
 			printf("failed to set mac addr\n");
 			return -1;
 		}
 #endif
-		memset(cmd_buf, 0, 2048);
-		sprintf(cmd_buf, "ifconfig mesh0 up");
-		len = sizeof(cmd_buf) - 1;
+		prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "ifconfig mesh0 up");
 		ret = wifi_hal_run_sys_cmd(cmd_buf, resp_buf, (int)len);
 		if (ret) {
 			printf("failed to up mesh0 if\n");
@@ -1074,18 +1068,16 @@ static int wifi_hal_join_mesh(struct radio_context *ctx, char *ssid, char *psk, 
 		}
 	}
 
-	memset(cmd_buf, 0, 2048);
-	sprintf(cmd_buf, "rm /var/run/wpa_supplicant/mesh0");
+	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "rm /var/run/wpa_supplicant/mesh0 2>/dev/null");
 	ret = wifi_hal_run_sys_cmd(cmd_buf, resp_buf, (int)len);
 	if (ret) {
 		printf("warning: failed to remove supplicant socket\n");
 	}
 
-	memset(cmd_buf, 0, 2048);
-	sprintf(cmd_buf, "wpa_supplicant -dd -B -imesh0 -Dnl80211 -c%s -f /tmp/wpa_supplicant_11s.log", WPA_SUPPLICANT_DEFAULT_CONFIG);
-	len = sizeof(cmd_buf) - 1;
+	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf),
+					(const char*) "wpa_supplicant -dd -B -imesh0 -Dnl80211 -c%s -f /tmp/wpa_supplicant_11s.log",
+					WPA_SUPPLICANT_DEFAULT_CONFIG);
 	ret = system(cmd_buf);
-	//ret = execlp("wpa_supplicant", "wpa_supplicant", "-Dnl80211", "-B", "-imesh0", "-c/etc/wpa_supplicant/wpa_supplicant-mesh.conf", "-dd", nullptr);
 	if (ret) {
 		printf("failed to start supplicant in mesh0 interface\n");
 		return -1;
@@ -1102,78 +1094,66 @@ static int wifi_hal_join_mesh(struct radio_context *ctx, char *ssid, char *psk, 
 		return -1;
 	}
 
-	memset(cmd_buf, 0, 2048);
-	len = sizeof(cmd_buf) - 1;
-	strcpy(cmd_buf, "REMOVE_NETWORK all");
-	ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
+	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "REMOVE_NETWORK all");
+	ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, (size_t *)&len);
 	if (ret < 0) {
 		/* To Do: remove this once concurrency supported */
 		printf("Fail to remove existing NW\n");
 	}
 
-	memset(cmd_buf, 0, 2048);
-	sprintf(cmd_buf, "ADD_NETWORK");
-	len = sizeof(cmd_buf) - 1;
+	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "ADD_NETWORK");
 	ret = wifi_hal_send_wpa_mesh_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
 	if (ret < 0) {
 		printf("mesh0 add network failed\n");
 		return -1;
-	} else {
-		if (strlen(resp_buf) < sizeof(nw_id) - 1)
+	} else { /* TODO own function? */
+		if (strlen(resp_buf) < sizeof(nw_id) - 1) {
 			strncpy(nw_id, resp_buf, sizeof(nw_id));
-		else
+			if (replace_line_change(nw_id, sizeof(nw_id)) < 0){
+				printf("Failed to get NWID\n");
+				return -1;
+			}
+		} else
 			return -1;
-		printf("NW ID:%s\n", nw_id);
+		printf("NWID %s\n", nw_id);
 	}
 
-	memset(cmd_buf, 0, 2048);
-	sprintf(cmd_buf, "SET_NETWORK %s mode 5", nw_id);
-	len = sizeof(cmd_buf) - 1;
+	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "SET_NETWORK %s mode 5", nw_id);
 	ret = wifi_hal_send_wpa_mesh_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
 	if (ret || strncmp(resp_buf, "OK", 2) != 0) {
 		printf("failed to set mesh mode\n");
 		return -1;
 	}
 
-	memset(cmd_buf, 0, 2048);
-	sprintf(cmd_buf, "SET_NETWORK %s ssid %s", nw_id, ssid);
-	len = sizeof(cmd_buf) - 1;
+	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "SET_NETWORK %s ssid %s", nw_id, ssid);
 	ret = wifi_hal_send_wpa_mesh_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
 	if (ret || strncmp(resp_buf, "OK", 2) != 0) {
 		printf("failed to set mesh ssid\n");
 		return -1;
 	}
 
-	memset(cmd_buf, 0, 2048);
-	sprintf(cmd_buf, "SET_NETWORK %s frequency %s", nw_id, freq);
-	len = sizeof(cmd_buf) - 1;
+	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "SET_NETWORK %s frequency %s", nw_id, freq);
 	ret = wifi_hal_send_wpa_mesh_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
 	if (ret || strncmp(resp_buf, "OK", 2) != 0) {
 		printf("failed to set mesh freq\n");
 		return -1;
 	}
 
-	memset(cmd_buf, 0, 2048);
-	sprintf(cmd_buf, "SET_NETWORK %s key_mgmt SAE", nw_id);
-	len = sizeof(cmd_buf) - 1;
+	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "SET_NETWORK %s key_mgmt SAE", nw_id);
 	ret = wifi_hal_send_wpa_mesh_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
 	if (ret || strncmp(resp_buf, "OK", 2) != 0) {
 		printf("failed to set mesh key mgmt\n");
 		return -1;
 	}
 
-	memset(cmd_buf, 0, 2048);
-	sprintf(cmd_buf, "SET_NETWORK %s psk %s", nw_id, psk);
-	len = sizeof(cmd_buf) - 1;
+	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "SET_NETWORK %s psk %s", nw_id, psk);
 	ret = wifi_hal_send_wpa_mesh_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
 	if (ret || strncmp(resp_buf, "OK", 2) != 0) {
 		printf("failed to set mesh psk\n");
 		return -1;
 	}
 
-	memset(cmd_buf, 0, 2048);
-	sprintf(cmd_buf, "MESH_GROUP_ADD %s", nw_id);
-	len = sizeof(cmd_buf) - 1;
+	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "MESH_GROUP_ADD %s", nw_id);
 	ret = wifi_hal_send_wpa_mesh_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
 	if (ret || strncmp(resp_buf, "OK", 2) != 0) {
 		printf("failed to enable mesh0\n");
