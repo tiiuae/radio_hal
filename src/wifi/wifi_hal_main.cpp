@@ -96,10 +96,22 @@ int wifi_hal_run_sys_cmd(char *cmd, char *resp_buf, int resp_size)
 	return 0;
 }
 
+static int replace_line_change(char *buf, size_t size) {
+	int len;
+
+	len = strnlen(buf, size);
+	if (len > 0 && (buf[len-1] == '\n'|| buf[len-1] == '\0') ) {
+		buf[len-1] = '\0';
+	} else {
+		printf("fail to find line change \n");
+		return -1;
+	}
+	return 0;
+}
+
 static int wifi_hal_get_phyname(struct wifi_softc *sc, char *cmd, char *resp_buf, int resp_size)
 {
 	int ret;
-	unsigned int len;
 
 	sprintf(cmd, "iw dev %s info | grep wiphy | awk '{print $2}'", sc->nl_ctx.ifname);
 	ret = wifi_hal_run_sys_cmd(cmd, resp_buf, resp_size);
@@ -108,11 +120,8 @@ static int wifi_hal_get_phyname(struct wifi_softc *sc, char *cmd, char *resp_buf
 		return -1;
 	}
 
-	/* replace \n */
-	len = strlen(resp_buf);
-	if (len > 0 && resp_buf[len-1] == '\n') {
-		resp_buf[len-1] = '\0';
-	} else {
+	ret = replace_line_change(resp_buf, (size_t)resp_size);
+	if (ret<0) {
 		printf("fail with phyname\n");
 		return -1;
 	}
@@ -886,12 +895,16 @@ static int wifi_hal_connect_ap(struct radio_context *ctx, char *ssid, char *psk)
 	if (ret < 0) {
         printf("Fail to add NW\n");
         return ret;
-	} else {
-		if (strlen(resp_buf) < sizeof(nw_id) - 1)
+	} else { /* TODO own function? */
+		if (strlen(resp_buf) < sizeof(nw_id) - 1) {
 			strncpy(nw_id, resp_buf, sizeof(nw_id));
-		else
+			if (replace_line_change(nw_id, sizeof(nw_id)) < 0){
+				printf("Failed to get NWID\n");
+				return -1;
+			}
+		} else
 			return -1;
-		printf("NW ID:%s\n", nw_id);
+		printf("NWID %s\n", nw_id);
 	}
 
 	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "SET_NETWORK ");
@@ -947,11 +960,16 @@ static int wifi_hal_create_ap(struct radio_context *ctx, char *ssid, char *psk, 
 	if (ret < 0) {
 		printf("Fail to add NW\n");
 		return ret;
-	} else {
-		if (strlen(resp_buf) < sizeof(nw_id) - 1)
+	} else { /* TODO own function? */
+		if (strlen(resp_buf) < sizeof(nw_id) - 1) {
 			strncpy(nw_id, resp_buf, sizeof(nw_id));
-		else
+			if (replace_line_change(nw_id, sizeof(nw_id)) < 0){
+				printf("Failed to get NWID\n");
+				return -1;
+			}
+		} else
 			return -1;
+		printf("NWID %s\n", nw_id);
 	}
 
 	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "SET_NETWORK %s mode 2", nw_id);
@@ -1088,12 +1106,16 @@ static int wifi_hal_join_mesh(struct radio_context *ctx, char *ssid, char *psk, 
 	if (ret < 0) {
 		printf("mesh0 add network failed\n");
 		return -1;
-	} else {
-		if (strlen(resp_buf) < sizeof(nw_id) - 1)
+	} else { /* TODO own function? */
+		if (strlen(resp_buf) < sizeof(nw_id) - 1) {
 			strncpy(nw_id, resp_buf, sizeof(nw_id));
-		else
+			if (replace_line_change(nw_id, sizeof(nw_id)) < 0){
+				printf("Failed to get NWID\n");
+				return -1;
+			}
+		} else
 			return -1;
-		printf("NW ID:%s\n", nw_id);
+		printf("NWID %s\n", nw_id);
 	}
 
 	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "SET_NETWORK %s mode 5", nw_id);
