@@ -32,9 +32,9 @@ CFLAGS = -MMD -O2 -Wall -Werror -g -fPIC -I$(INC_DIR) -I$(SRC_DIR)/$(WIFI_HAL_DI
 CXXFLAGS = -MMD -O2 -Wall -Werror -g -fPIC -I$(INC_DIR) -I$(SRC_DIR)/$(WIFI_HAL_DIR) -I$(SRC_DIR)/$(WIFI_HAL_DIR)/$(WPA_CTL_DIR)/ -I/usr/include/libnl3/ -std=${CXXSTD}
 endif
 
-LDFLAGS=$(shell pkg-config --libs libnl-3.0 libnl-genl-3.0)
+LDFLAGS=$(shell pkg-config --libs libnl-3.0 libnl-genl-3.0 yaml-0.1)
 
-OBJ=$(SRC_DIR)/$(CMN_SRC_DIR)/radio_hal_main.o $(SRC_DIR)/$(WIFI_HAL_DIR)/$(WPA_CTL_DIR)/os_unix.o $(SRC_DIR)/$(WIFI_HAL_DIR)/$(WPA_CTL_DIR)/wpa_ctrl.o $(SRC_DIR)/$(WIFI_HAL_DIR)/wifi_hal_main.o
+OBJ=$(SRC_DIR)/$(CMN_SRC_DIR)/radio_hal_main.o $(SRC_DIR)/$(CMN_SRC_DIR)/radio_hal_yaml.o $(SRC_DIR)/$(WIFI_HAL_DIR)/$(WPA_CTL_DIR)/os_unix.o $(SRC_DIR)/$(WIFI_HAL_DIR)/$(WPA_CTL_DIR)/wpa_ctrl.o $(SRC_DIR)/$(WIFI_HAL_DIR)/wifi_hal_main.o
 
 ${ALL}: $(OBJ)
 

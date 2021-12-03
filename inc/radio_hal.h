@@ -6,6 +6,8 @@
 #define RADIO_HAL_VERSION_SIZE 32
 #define RADIO_MACADDR_SIZE 18
 
+//#define RADIO_HAL_UNIT_TEST
+
 enum radio_state {
 	RADIO_IDLE_STATE,
 	RADIO_SLEEP_STATE,
