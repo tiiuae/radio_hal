@@ -213,6 +213,7 @@ int main(int argc, char *argv[]) {
 				radio_ops->open(ctx, RADIO_WIFI);
 				radio_ops->radio_get_iface_name(ctx, ifname, 1);
 				radio_ops->radio_join_mesh(ctx, w_config->ssid, w_config->key, w_config->freq);
+				// TODO TBD status communication
 				//radio_ops->close(ctx, RADIO_WIFI);
 				//free(config);
 				//radio_hal_dettach(ctx, RADIO_WIFI);
@@ -221,15 +222,15 @@ int main(int argc, char *argv[]) {
 				ctx = radio_hal_attach(RADIO_BT);
 				if (!ctx)
 					printf("failed to attach BT Radio HAL\n");
-				// config = (bt_config *)malloc(sizeof(bt_config));
-				// ret = radio_hal_yaml_config(config, (char *)argv[2], RADIO_BT);
+				 config = (bt_config *)malloc(sizeof(bt_config));
+				 ret = radio_hal_yaml_config(config, (char *)argv[2], RADIO_BT);
 				break;
 			case 'z':
 				ctx = radio_hal_attach(RADIO_15_4);
 				if (!ctx)
 					printf("failed to attach 15.4 Radio HAL\n");
-				// config = (z_config *)malloc(sizeof(z_config));
-				// ret = radio_hal_yaml_config(config, (char *)argv[2], RADIO_15_4);
+				config = (z_config *)malloc(sizeof(z_config));
+				ret = radio_hal_yaml_config(config, (char *)argv[2], RADIO_15_4);
 				break;
 			case 'h':
 				show_radio_hal_help();
