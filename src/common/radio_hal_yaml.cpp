@@ -22,6 +22,7 @@ static int radio_hal_yaml_z_config(struct z_config* conf_struct, char *key, char
 
 static int radio_hal_yaml_wifi_config(struct wifi_config* conf_struct, char *key, char *value)
 {
+	/* TODO concurrency with single radio? */
 	if (debug)
 		printf("radio_hal_wifi_config: key: %s value: %s\n", key, value);
 

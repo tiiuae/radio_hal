@@ -1,5 +1,8 @@
 #include <cstdio>
 #include <getopt.h>
+#ifdef RADIO_HAL_UNIT_TEST
+#include <cstring>
+#endif
 #include "radio_hal.h"
 #include "wifi_hal.h"
 #include "radio_hal_yaml.h"

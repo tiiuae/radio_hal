@@ -30,6 +30,7 @@ endif
 ifndef CFLAGS
 CFLAGS = -MMD -O2 -Wall -Werror -g -fPIC -I$(INC_DIR) -I$(SRC_DIR)/$(WIFI_HAL_DIR) -I$(SRC_DIR)/$(WIFI_HAL_DIR)/$(WPA_CTL_DIR)/ -I/usr/include/libnl3/ -std=${CSTD}
 CXXFLAGS = -MMD -O2 -Wall -Werror -g -fPIC -I$(INC_DIR) -I$(SRC_DIR)/$(WIFI_HAL_DIR) -I$(SRC_DIR)/$(WIFI_HAL_DIR)/$(WPA_CTL_DIR)/ -I/usr/include/libnl3/ -std=${CXXSTD}
+CXXFLAGS += -DRADIO_HAL_UNIT_TEST
 endif
 
 LDFLAGS=$(shell pkg-config --libs libnl-3.0 libnl-genl-3.0 yaml-0.1)
@@ -48,7 +49,7 @@ ${ALL}: $(OBJ)
 
 
 libradio_hal.so: $(OBJ)
-	$(CXX) $(LDFLAGS) -o $@ $(CXXFLAGS) -shared -fPIC $^
+	$(CXX) $(LDFLAGS) -o $@ $(CFLAGS) -shared -fPIC $^
 
 
 radio_hal_daemon: libradio_hal.so
