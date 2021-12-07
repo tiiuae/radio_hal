@@ -3,3 +3,4 @@
 *.d
 *.so
 radio_hal_daemon
+radio_manager
