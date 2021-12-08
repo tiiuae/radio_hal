@@ -12,8 +12,9 @@ struct wifi_config {
 	char ap_mac_addr[RADIO_MACADDR_SIZE];
 	char country[3];		// Country code, sets tx power limits and supported channels
 	char freq[6];
-	char ip[16];			// IP address
-	char subnet[16];		// subnet mask
+	char bw[4];			// 5/10/20/??
+	char preamble[6];		// short/long
+	int distance;			// distance (coverage-class fine tuning)
 	int tx_power;			/* select 30dBm, HW and regulations limiting it correct level.
 							* Can be used to set lower dBm levels for testing purposes (e.g. 5dBm) */
 	char mode[5];			// mesh=mesh network, ap=debug hotspot sta=connect ap

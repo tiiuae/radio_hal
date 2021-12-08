@@ -1,7 +1,6 @@
 #include <cstdio>
 #include <cstring>
 #include <yaml.h>
-#include "wifi_hal.h"
 #include "radio_hal.h"
 #include "radio_hal_yaml.h"
 
@@ -46,10 +45,12 @@ static int radio_hal_yaml_wifi_config(struct wifi_config* conf_struct, char *key
 		//conf_struct->ap_mac_addr
 	} else if(!strcmp(key, "country")) {
 		//conf_struct->country
-	} else if(!strcmp(key, "ip")) {
-		//conf_struct->ip
-	} else if(!strcmp(key, "subnet")) {
-		//conf_struct->subnet
+	} else if(!strcmp(key, "bw")) {
+		//conf_struct->bw
+	} else if(!strcmp(key, "preamble")) {
+		//conf_struct->preamble
+	} else if(!strcmp(key, "distance")) {
+		//conf_struct->distance
 	} else if(!strcmp(key, "tx_power")) {
 		//conf_struct->tx_power
 	} else if(!strcmp(key, "mode")) {
