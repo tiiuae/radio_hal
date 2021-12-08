@@ -23,6 +23,12 @@ $ cd radio_hal
 $ sudo apt install libnl-genl-3-dev
 
 ```
+## Install yaml library
+```
+
+$ sudo apt install libyaml-dev
+
+```
 ## Build Modules
 ```
 
