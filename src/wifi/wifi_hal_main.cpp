@@ -208,7 +208,7 @@ static int wifi_hal_ifname_resp_hdlr(struct nl_msg *msg, void *arg)
 			nullptr);
 
 	if (tb_msg[NL80211_ATTR_IFNAME]) {
-		strcpy(nl_ctx->ifname, nla_get_string(tb_msg[NL80211_ATTR_IFNAME]));
+		snprintf(nl_ctx->ifname, RADIO_IFNAME_SIZE, "%s", nla_get_string(tb_msg[NL80211_ATTR_IFNAME]));
 	}
 
 	if (tb_msg[NL80211_ATTR_IFINDEX]) {
