@@ -71,6 +71,13 @@ static int test_radio_hal_api(struct radio_context *ctx, char *argv[],
 			break;
 		case RADIO_15_4:
 			break;
+		case RADIO_MODEM:
+			if(!strcmp(cmd, "radio_get_hal_version")) {
+				radio_ops->open(ctx, RADIO_MODEM);
+				radio_ops->radio_get_hal_version(version);
+				printf("VERSION:%s\n", (char *) &version);
+			}
+			break;
 	}
 
 	return err;
@@ -82,13 +89,14 @@ static void show_radio_hal_help()
 	printf("./radio_hal_daemon -w <radio index> Attach wifi radio HAL \n");
 	printf("./radio_hal_daemon -b <radio index> Attach BT radio HAL \n");
 	printf("./radio_hal_daemon -b <radio index> Attach 15.4 radio HAL \n");
+	printf("./radio_hal_daemon -m <radio index> Attach Modem radio HAL \n");
 	printf("\n-------------------------- ----------------------------------------------\n");
 }
 
 int main(int argc, char *argv[])
 {
 	int c;
-	const char *short_opt = "w::b::z::h::";
+	const char *short_opt = "w::b::z::m::h::";
 	int long_opt_ptr;
 	struct radio_context *ctx = nullptr;
 	struct option long_opt[] =
@@ -96,6 +104,7 @@ int main(int argc, char *argv[])
 		{"wifi", required_argument,nullptr, 'w'},
 		{"bt", required_argument,nullptr, 'b'},
 		{"Zigbee", required_argument,nullptr, 'z'},
+		{"Modem", required_argument,nullptr, 'm'},
 		{"help", optional_argument,nullptr, 'h'}
 	};
 
@@ -122,6 +131,14 @@ int main(int argc, char *argv[])
 				ctx = radio_hal_attach(RADIO_15_4);
 				if (!ctx)
 					printf("failed to attach 15.4 Radio HAL\n");
+				break;
+			case 'm':
+				ctx = radio_hal_attach(RADIO_MODEM);
+				if (!ctx)
+					printf("failed to attach Modem Radio HAL\n");
+				if (argc >= 3)
+					test_radio_hal_api(ctx, argv, RADIO_MODEM);
+				radio_hal_dettach(ctx, RADIO_MODEM);
 				break;
 			case 'h':
 				show_radio_hal_help();

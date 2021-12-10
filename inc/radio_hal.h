@@ -18,6 +18,7 @@ enum radio_type {
 	RADIO_WIFI,
 	RADIO_BT,
 	RADIO_15_4,
+	RADIO_MODEM,
 };
 
 enum radio_feature {
