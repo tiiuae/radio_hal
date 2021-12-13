@@ -988,47 +988,40 @@ static int wifi_hal_create_ap(struct radio_context *ctx, char *ssid, char *psk, 
 		printf("NWID %s\n", nw_id);
 	}
 
-	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "SET_NETWORK %s mode 2", nw_id);
-	ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
-	if (ret || strncmp(resp_buf, "OK", 2) != 0) {
-		printf("failed to set mesh mode\n");
-		return -1;
-	}
+	struct wpa_cmd {
+		std::initializer_list<std::string> args;
+		const char* debug_name;
+	};
 
-	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "SET_NETWORK %s ssid \"%s\"", nw_id, ssid);
-	ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
-	if (ret || strncmp(resp_buf, "OK", 2) != 0) {
-		printf("failed to set mesh ssid\n");
-		return -1;
-	}
+	auto network_setup = [&cmd_buf, &sc, &resp_buf, &len](wpa_cmd cmd)
+	{
+		std::ostringstream oss;
+		for (auto arg : cmd.args) {
+			oss << arg;
+		}
 
-	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "SET_NETWORK %s frequency %s", nw_id, freq);
-	ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
-	if (ret || strncmp(resp_buf, "OK", 2) != 0) {
-		printf("failed to set mesh freq\n");
-		return -1;
-	}
+		prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), oss.str().c_str());
+		int ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
+		if (ret || strncmp(resp_buf, "OK", 2) != 0) {
+			printf("failed to %s\n", cmd.debug_name);
+			return -1;
+		}
+		return 0;
+	};
 
-	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "SET_NETWORK %s key_mgmt WPA-PSK", nw_id);
-	ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
-	if (ret || strncmp(resp_buf, "OK", 2) != 0) {
-		printf("failed to set mesh key mgmt\n");
-		return -1;
-	}
+	const wpa_cmd commands[] = {
+		{{"SET_NETWORK ", nw_id, " mode 2"}, 				(const char*) "set mesh mode"},
+		{{"SET_NETWORK " , nw_id, " ssid \"", ssid, "\""}, 	(const char*) "set mesh ssid"},
+		{{"SET_NETWORK ", nw_id, " frequency ", freq}, 		(const char*) "set mesh freq"},
+		{{"SET_NETWORK ", nw_id, " key_mgmt WPA-PSK"},		(const char*) "set mesh key mgmt"},
+		{{"SET_NETWORK ", nw_id, " psk \"", psk, "\""}, 	(const char*) "set mesh psk"},
+		{{"MESH_GROUP_ADD ", nw_id}, 						(const char*) "enable mesh"}
+	};
 
-	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "SET_NETWORK %s psk \"%s\"", nw_id, psk);
-	ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
-	if (ret || strncmp(resp_buf, "OK", 2) != 0) {
-		printf("failed to set mesh psk\n");
-		return -1;
-	}
-
-	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "ENABLE_NETWORK %s", nw_id);
-	ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
-
-	if (ret || strncmp(resp_buf, "OK", 2) != 0) {
-			printf("failed to enable network\n");
-		return -1;
+	for (auto cmd : commands)
+	{
+		if (network_setup(cmd) == -1)
+			return -1;
 	}
 
 	return 0;
