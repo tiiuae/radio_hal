@@ -29,6 +29,12 @@ struct z_config {
 	bool debug;
 };
 
+struct modem_config {
+	char apn[20];			// internet APN
+	char pin[5];			// SIM pin number
+	char proto[10];			// protocol; qmicli, at,
+};
+
 
 int radio_hal_yaml_config(void *conf_struct, const char* yaml_file, radio_type radio);
 

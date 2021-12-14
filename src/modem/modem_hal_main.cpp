@@ -1,56 +1,22 @@
 #include <unistd.h>
-#include "radio_hal.h"
-#include <netlink/handlers.h>
+#include <cstdio>
+#include <cstring>
+#include <fcntl.h>
 #include <netlink/netlink.h>
+#include "modem_hal.h"
 
 #define MODEM_RADIO_HAL_MAJOR_VERSION 0
 #define MODEM_RADIO_HAL_MINOR_VERSION 1
 
-#define CMD_BUFFER_SIZE sizeof(char) * 2048
-#define RESP_BUFFER_SIZE sizeof(char) * 2048
-
 static int debug;
 
-__attribute__((unused)) int modem_hal_run_sys_cmd(char *cmd, char *resp_buf, int resp_size)
+static int modem_hal_get_hal_version(char *version)
 {
-	FILE *f;
-	char *buf = resp_buf;
-	int size=resp_size, resp_buf_bytes, readbytes;
-    char *ret;
-
-	if((f = popen(cmd, "r")) == nullptr) {
-		printf("popen %s error\n", cmd);
-		return -1;
-	}
-
-	while(!feof(f))
-	{
-		*buf = 0;
-		if(size>=128) {
-			resp_buf_bytes=128;
-		} else {
-			resp_buf_bytes=size-1;
-		}
-
-		ret = fgets(buf,resp_buf_bytes,f);
-		readbytes = (int)strlen(buf);
-		if (!readbytes || ret == nullptr)
-			break;
-
-		size -= readbytes;
-		buf += readbytes;
-
-	}
-	pclose(f);
-	resp_buf[resp_size-1]=0;
-
-	if (debug)
-		printf("sys cmd:%s resp:%s\n", cmd, resp_buf);
-
+	snprintf(version, 32, "%d.%d", MODEM_RADIO_HAL_MAJOR_VERSION, MODEM_RADIO_HAL_MINOR_VERSION);
 	return 0;
 }
 
-__attribute__((unused)) static int replace_line_change(char *buf, size_t size) {
+static int replace_line_change(char *buf, size_t size) {
 	int len;
 
 	len = strnlen(buf, size);
@@ -63,21 +29,253 @@ __attribute__((unused)) static int replace_line_change(char *buf, size_t size) {
 	return 0;
 }
 
-static int modem_hal_get_hal_version(char *version)
+static int write_to_serial(struct modem_softc *sc, const char *cmd)
 {
-	snprintf(version, 32, "%d.%d", MODEM_RADIO_HAL_MAJOR_VERSION, MODEM_RADIO_HAL_MINOR_VERSION);
+	int err = 0;
 
+	if(!cmd) {
+		return -1;
+	}
+
+	err = write(sc->atif, cmd, (size_t)strlen(cmd));
+
+	if (!err) //TODO
+		return -1;
+
+	return 0;
+}
+
+__attribute__((unused)) static int read_from_serial(struct modem_softc *sc, char *response, int resp_len)
+{
+	ssize_t err = 0;
+
+	if(!response) {
+		return -1;
+	}
+
+	err = read(sc->atif, response, resp_len - 1);
+	printf("read_from_serial %ld %s", err, response);
+	if (!err) //TODO
+		return -1;
+
+	return 0;
+}
+
+__attribute__((unused)) static int at_send_command(struct modem_softc *sc, const char *cmd, long timeout_msec, char *response, int len)
+{
+	int err = 0;
+
+	if(!cmd) {
+		return -1;
+	}
+
+	err =  write_to_serial(sc, cmd);
+	if (err < 0) {
+		return -1;
+	}
+
+	//sleep(timeout_msec/1000);
+	//err =  read_from_serial(sc, response, len);
+
+	if(debug)
+		printf("at_send_command:%s resp:%s\n", cmd, response);
+
+	if (err < 0) {
+		return -1;
+	}
+	return err;
+}
+
+static int modem_hal_find_modem(struct modem_softc *sc, char *resp_buf, int len)
+{
+	int ret;
+
+	ret = radio_hal_run_sys_cmd((char *)"ls /sys/class/usbmisc/ |grep cdc", resp_buf, len);
+	if (ret) {
+		printf("failed to get modem\n");
+		return -1;
+	}
+
+	ret = replace_line_change(resp_buf, (size_t)len);
+	if (ret<0) {
+		printf("fail with modem\n");
+		return -1;
+	}
+
+	if (debug)
+		printf("modem |%s|\n", resp_buf);
+
+	return 0;
+}
+
+static int modem_hal_find_wwan(struct modem_softc *sc, char *resp_buf, int len)
+{
+	int ret;
+	char cmd[CMD_BUFFER_SIZE] = {0};
+
+	radio_hal_prepare_cmd_buf(cmd, sizeof(cmd), (const char*) "qmicli --device=/dev/%s --get-wwan-iface", sc->modem);
+	ret = radio_hal_run_sys_cmd(cmd, resp_buf, len);
+	if (ret) {
+		printf("failed to get wwan\n");
+		return -1;
+	}
+
+	ret = replace_line_change(resp_buf, (size_t)len);
+	if (ret<0) {
+		printf("fail with wwan\n");
+		return -1;
+	}
+
+	if (debug)
+		printf("wwan |%s|\n", resp_buf);
+
+	return 0;
+}
+
+static int modem_hal_serial_attach(struct modem_softc *sc)
+{
+		int ret = 0;
+		char cmd_buf[CMD_BUFFER_SIZE] = {0};
+		char resp_buf[RESP_BUFFER_SIZE] = {0};
+		size_t len = sizeof(resp_buf) - 1;
+
+		sc->atif = open("/dev/ttyUSB2", O_RDWR | O_NOCTTY | O_SYNC);
+		if (!sc->atif) {
+			printf("Failed to open %s!\n", "/dev/ttyUSB2");
+			return -1;
+		}
+
+		/* TODO at command support */
+		/* ret = at_send_command(sc, "ATATE0Q0V1", 1000, resp_buf, len);
+
+		if (ret)
+			return -1; */
+
+		ret = modem_hal_find_modem(sc, resp_buf, len);
+		if (ret) {
+			printf("Failed modem_hal_get_modem()\n");
+			return -1;
+		}
+		strcpy(sc->modem, resp_buf);
+
+		ret = modem_hal_find_wwan(sc, resp_buf, len);
+		if (ret) {
+			printf("Failed modem_hal_get_wwan()\n");
+			return -1;
+		}
+		strcpy(sc->wwan, resp_buf);
+
+		radio_hal_prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "echo Y > /sys/class/net/%s/qmi/raw_ip", sc->wwan);
+		ret = radio_hal_run_sys_cmd(cmd_buf, resp_buf, (int)len);
+		if (ret) {
+			printf("Failed to turn on wwan raw_ip mode\n");
+			return -1;
+		}
+
+        return 0;
+}
+
+static int modem_hal_serial_detach(struct modem_softc *sc)
+{
+	int err = 0;
+
+	err = close(sc->atif);
+	if (err) {
+		printf("Failed to close %s!\n", "/dev/ttyUSB2");
+		return -1;
+	}
 	return 0;
 }
 
 static int modem_hal_open(struct radio_context *ctx, enum radio_type type)
 {
+	int err = 0;
+	struct modem_softc *sc = (struct modem_softc *) ctx->radio_private;
+
+	if (debug)
+		printf("modem HAL open\n");
+
+	err = modem_hal_serial_attach(sc);
+	if (err) {
+		printf("failed to register modem\n");
+		return -1;
+	}
 	return 0;
 }
 
 static int modem_hal_close(struct radio_context *ctx, enum radio_type type)
 {
+	int err = 0;
+	struct modem_softc *sc = (struct modem_softc *) ctx->radio_private;
+
+	if (debug)
+		printf("modem HAL close\n");
+
+	err = modem_hal_serial_detach(sc);
+	if (err) {
+		printf("failed to register modem\n");
+		return -1;
+	}
 	return 0;
+}
+
+/* See 27.007 annex B */
+static const char *responses_error[] = {
+		"ERROR",
+		"+CMS ERROR:",
+		"+CME ERROR:",
+		"NO CARRIER", /* sometimes! */
+		"NO ANSWER",
+		"NO DIALTONE",
+		nullptr
+};
+
+__attribute__((unused)) static int is_response_error(const char *line)
+{
+	size_t i;
+	for (i = 0 ; responses_error[i] != nullptr ; i++) {
+		if (strncmp(line, responses_error[i], strlen(responses_error[i])) == 0) {
+			return 1;
+		}
+	}
+	return 0;
+}
+
+/* See 27.007 annex B */
+static const char *responses_success[] = {
+		"OK",
+		"CONNECT",
+		nullptr
+};
+__attribute__((unused)) static int is_response_success(const char *line)
+{
+	size_t i;
+	for (i = 0 ; responses_success[i] != nullptr ; i++) {
+		if (strncmp(line, responses_success[i], strlen(responses_success[i])) == 0) {
+			return 1;
+		}
+	}
+	return 0;
+}
+
+int modem_hal_connect(struct radio_context *ctx, char *apn, char *pin)
+{
+	struct modem_softc *sc = (struct modem_softc *) ctx->radio_private;
+	int ret = 0;
+	char cmd_buf[CMD_BUFFER_SIZE] = {0};
+	char resp_buf[RESP_BUFFER_SIZE] = {0};
+	size_t len = sizeof(resp_buf) - 1;
+
+	radio_hal_prepare_cmd_buf(cmd_buf, sizeof(cmd_buf),
+							  (const char*) "qmicli --device=/dev/%s --device-open-proxy --wds-start-network=\"ip-type=4,apn=%s\" --client-no-release-cid",
+							  sc->modem, apn);
+	ret = radio_hal_run_sys_cmd(cmd_buf, resp_buf, (int)len);
+	if (ret) {
+		printf("Failed to connect internet\n");
+		return -1;
+	}
+
+	return ret;
 }
 
 static struct radio_generic_func modem_hal_ops = {
@@ -105,6 +303,7 @@ static struct radio_generic_func modem_hal_ops = {
 	.radio_connect_ap = nullptr,
 	.radio_create_ap = nullptr,
 	.radio_join_mesh = nullptr,
+	.radio_connect = modem_hal_connect,
 };
 
 __attribute__((unused)) int modem_hal_register_ops(struct radio_context *ctx)
@@ -117,6 +316,7 @@ __attribute__((unused)) int modem_hal_register_ops(struct radio_context *ctx)
 struct radio_context*  modem_hal_attach()
 {
 	struct radio_context *ctx = nullptr;
+	struct modem_softc *sc = nullptr;
 
 	ctx = (struct radio_context *)malloc(sizeof(struct radio_context));
 	if (!ctx) {
@@ -124,8 +324,14 @@ struct radio_context*  modem_hal_attach()
 		return nullptr;
 	}
 
-	/* need register somewhere TODO */
+	sc = (struct modem_softc *)malloc(sizeof(struct modem_softc));
+	if (!sc) {
+			printf("failed to allocate modem softc ctx\n");
+			free(ctx);
+			return nullptr;
+	}
 
+	ctx->radio_private = (void*)sc;
 	ctx->cmn.rd_func = &modem_hal_ops;
 	printf("Modem HAL attach completed\n");
 
@@ -134,8 +340,12 @@ struct radio_context*  modem_hal_attach()
 
 int modem_hal_detach(struct radio_context *ctx)
 {
+	struct modem_softc *sc = (struct modem_softc *)ctx->radio_private;
+
+	free(sc);
 	free(ctx);
 
 	printf("MODEM HAL detach completed\n");
 	return 0;
 }
+

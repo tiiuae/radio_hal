@@ -1,6 +1,8 @@
 #ifndef __RADIO_HAL_H__
 #define __RADIO_HAL_H__
 
+#include "radio_hal_common.h"
+
 #define RADIO_IFNAME_SIZE 16
 #define RADIO_PHYNAME_SIZE 8
 #define RADIO_HAL_VERSION_SIZE 32
@@ -86,6 +88,7 @@ typedef struct radio_generic_func {
 	int (*radio_connect_ap)(struct radio_context *ctx, char *ssid, char *psk);
 	int (*radio_create_ap)(struct radio_context *ctx, char *ssid, char *psk, char *freq);
 	int (*radio_join_mesh)(struct radio_context *ctx, char *ssid, char *psk, char *freq);
+	int (*radio_connect)(struct radio_context *ctx, char *apn, char *pin);
 } radio_gen_func_t;
 
 struct radio_common
@@ -105,5 +108,4 @@ struct radio_context
 
 struct radio_context* radio_hal_attach(enum radio_type type);
 int radio_hal_dettach(struct radio_context *ctx, enum radio_type type);
-
 #endif

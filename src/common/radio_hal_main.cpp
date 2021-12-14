@@ -3,6 +3,7 @@
 #include <cstring>
 #include "radio_hal.h"
 
+
 #ifdef RADIO_HAL_UNIT_TEST
 static int test_radio_hal_api(struct radio_context *ctx, char *argv[],
 		enum radio_type type)
@@ -76,6 +77,10 @@ static int test_radio_hal_api(struct radio_context *ctx, char *argv[],
 				radio_ops->open(ctx, RADIO_MODEM);
 				radio_ops->radio_get_hal_version(version);
 				printf("VERSION:%s\n", (char *) &version);
+			} else if(!strcmp(cmd, "radio_hal_connect")) {
+					radio_ops->open(ctx, RADIO_MODEM);
+					radio_ops->radio_connect(ctx, argv[3], argv[4]);
+					radio_ops->close(ctx, RADIO_MODEM);
 			}
 			break;
 	}

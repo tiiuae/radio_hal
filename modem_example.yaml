@@ -1,0 +1,3 @@
+apn: "internet"       # internet APN name
+pin: "1234"           # SIM Pin code TODO
+proto: "qmi"          # qmicli/at/mmcli/etc todo

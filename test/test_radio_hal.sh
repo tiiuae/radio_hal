@@ -3,21 +3,23 @@
 function help
 {
 	echo
-	echo "Usage: sudo $0 [ap|mesh|sta] <ssid> <psk> <ip> <mask> <freq>"
+	echo "Wifi usage: sudo $0 [ap|mesh|sta] <ssid> <psk> <ip> <mask> <freq>"
+	echo "Modem usage: sudo $0 modem <apn> <pin>"
 	echo
 	echo "example:"
 	echo "sudo $0 mesh test 12345678 192.168.1.2 255.255.255.0 5220"
 	echo "sudo $0 ap test 12345678 192.168.1.2 255.255.255.0"
 	echo "sudo $0 sta test 12345678 192.168.1.2 255.255.255.0"
+	echo
+	echo "modem example:"
+	echo "sudo $0 modem internet 1234"
 	exit
 }
-
 
 if [ -z "$1" ]; then
 	echo "check arguments..."
 	help
 fi
-
 
 mesh_activation()
 {
@@ -66,6 +68,18 @@ ap_activation()
 	ifconfig wlp1s0 "$4" netmask "$5"
 }
 
+connect_internet()
+{
+	radio_hal_daemon -m radio_hal_connect \""$2"\" \""$3"\"
+	### get cdc-wdm device ####
+  device=$(ls /sys/class/usbmisc/ |grep cdc)
+
+  ### get wwan name ###
+  wwan=$(qmicli --device=/dev/$device --get-wwan-iface)
+
+  udhcpc -q -f -n -i $wwan
+}
+
 off()
 {
 	# service off
@@ -74,6 +88,9 @@ off()
 	killall alfred 2>/dev/null
 	killall batadv-vis 2>/dev/null
 	rm -f /var/run/alfred.sock 2>/dev/null
+
+	#modem
+	killall udhcpc 2>/dev/null
 }
 
 ### MAIN ###
@@ -95,6 +112,9 @@ main ()
 			;;
 		sta)
 			sta_activation "$@"
+			;;
+		modem)
+      connect_internet "$@"
 			;;
 		off)
 			off "$@"
