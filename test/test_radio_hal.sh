@@ -27,7 +27,7 @@ mesh_activation()
 
 	modprobe batman-adv
 
-	radio_hal_daemon -w radio_mesh_join \""$2"\" \""$3"\" "$6"
+	radio_hal_daemon -w radio_mesh_join "$2" "$3" "$6"
 
 	echo "bat0 up.."
 	batctl if add mesh0
@@ -54,14 +54,14 @@ mesh_activation()
 sta_activation()
 {
 
-	radio_hal_daemon -w radio_hal_connect_ap \""$2"\" \""$3"\"
+	radio_hal_daemon -w radio_hal_connect_ap "$2" "$3"
 	# udhcp -i wlp1s0 TODO
 	ifconfig wlp1s0 "$4" netmask "$5"
 }
 
 ap_activation()
 {
-	radio_hal_daemon -w radio_hal_create_ap \""$2"\" \""$3"\" "$6"
+	radio_hal_daemon -w radio_hal_create_ap "$2" "$3" "$6"
 	# dhcp service TODO
 	ifconfig wlp1s0 "$4" netmask "$5"
 }
