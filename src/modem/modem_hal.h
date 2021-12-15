@@ -1,7 +1,7 @@
 #ifndef __MODEM_HAL_H__
 #define __MODEM_HAL_H__
 
-#include "radio_hal.h"
+
 
 struct modem_softc {
 	int atif;

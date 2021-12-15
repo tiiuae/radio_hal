@@ -3,6 +3,7 @@
 #include <cstring>
 #include <fcntl.h>
 #include <netlink/netlink.h>
+#include "radio_hal.h"
 #include "modem_hal.h"
 
 #define MODEM_RADIO_HAL_MAJOR_VERSION 0

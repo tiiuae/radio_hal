@@ -1,11 +1,9 @@
 #include <cstdio>
 #include <cstring>
-#include <getopt.h>
 #include <cstdarg>
 #include "radio_hal.h"
 #include "wifi_hal.h"
 #include "modem_hal.h"
-#include "radio_hal_yaml.h"
 
 static int debug;
 

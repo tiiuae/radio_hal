@@ -1,7 +1,7 @@
 #include <cstdio>
 #include <getopt.h>
+#include <cstdlib>
 #include "radio_hal.h"
-#include "wifi_hal.h"
 #include "radio_hal_yaml.h"
 
 #ifndef RADIO_HAL_UNIT_TEST

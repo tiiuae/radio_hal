@@ -29,12 +29,28 @@ $ sudo apt install libnl-genl-3-dev
 $ sudo apt install libyaml-dev
 
 ```
+## Install libqmi-utils for modem (qmicli)
+```
+
+$ sudo apt-get install libqmi-utils
+
+```
 ## Build Modules
 ```
 
 $ make
 
 ```
+
 ## Install Modules
+```
 
 $ sudo make install
+
+```
+
+## Build and install for unit testing
+```
+$ make RADIO_HAL_UNIT_TEST=1
+$ sudo make install RADIO_HAL_UNIT_TEST=1
+```

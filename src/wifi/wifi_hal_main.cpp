@@ -1,5 +1,6 @@
 #include <unistd.h>
 #include <cstdint>
+#include <string>
 #include "radio_hal.h"
 #include "wifi_hal.h"
 #include <netlink/attr.h>
