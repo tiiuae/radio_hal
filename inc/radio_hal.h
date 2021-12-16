@@ -1,8 +1,6 @@
 #ifndef __RADIO_HAL_H__
 #define __RADIO_HAL_H__
 
-#include "radio_hal_common.h"
-
 #define RADIO_IFNAME_SIZE 16
 #define RADIO_PHYNAME_SIZE 8
 #define RADIO_HAL_VERSION_SIZE 32

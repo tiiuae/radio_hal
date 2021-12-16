@@ -93,7 +93,7 @@ static void show_radio_hal_help()
 	printf("\n------------------------- Radio HAL uses --------------------------------\n");
 	printf("./radio_hal_daemon -w <radio index> Attach wifi radio HAL \n");
 	printf("./radio_hal_daemon -b <radio index> Attach BT radio HAL \n");
-	printf("./radio_hal_daemon -b <radio index> Attach 15.4 radio HAL \n");
+	printf("./radio_hal_daemon -z <radio index> Attach 15.4 radio HAL \n");
 	printf("./radio_hal_daemon -m <radio index> Attach Modem radio HAL \n");
 	printf("\n-------------------------- ----------------------------------------------\n");
 }
