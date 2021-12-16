@@ -12,8 +12,24 @@ enum HAL_DEBUG {
 	HAL_DBG_WIFI = 0x00000001,
 	HAL_DBG_MODEM = 0x00000002,
 	HAL_DBG_BT = 0x00000004,
+	HAL_DBG_COMMON = 0x00000008,
 	HAL_DBG_ANY = 0xffffffff
 };
+
+static const char *hal_debug_to_string(enum HAL_DEBUG hal_debug) {
+	switch (hal_debug) {
+		case HAL_DBG_WIFI:
+			return "WIFI";
+		case HAL_DBG_MODEM:
+			return "MODEM";
+		case HAL_DBG_BT:
+			return "BT";
+		case HAL_DBG_COMMON:
+			return "COMMON";
+		default:
+			return "ANY";
+	}
+}
 
 #if (defined DEBUG) && DEBUG == 1
 static unsigned int debug_mask = HAL_DBG_ANY;
@@ -23,29 +39,17 @@ static unsigned int debug_mask = HAL_DBG_ANY;
 #define DEBUG_PREFIX (const char*)"DBG"
 #define INFO_PREFIX (const char*)"INFO"
 
-const char *hal_debug_to_string(enum HAL_DEBUG hal_debug) {
-	switch (hal_debug) {
-		case HAL_DBG_WIFI:
-			return "WIFI";
-		case HAL_DBG_MODEM:
-			return "MODEM";
-		case HAL_DBG_BT:
-			return "BT";
-		default:
-			return "ANY";
-	}
-}
 
 #define hal_print(sub, prefix, fmt, args...) \
     do {                                     \
         if (debug_mask & sub) \
-            fprintf(stdout, "%-5s:%-5s: " fmt, prefix, hal_debug_to_string(sub), ##args); \
+            fprintf(stdout, "%-5s:%-6s: " fmt, prefix, hal_debug_to_string(sub), ##args); \
     } while (0)
 
 #define hal_print_critical(sub, prefix, fmt, args...) \
     do {        \
     if (debug_mask & sub) \
-            fprintf(stderr, "%-5s:%-5s: %s:%d:%s(): " fmt, prefix, hal_debug_to_string(sub), \
+            fprintf(stderr, "%-5s:%-6s: %s:%d:%s(): " fmt, prefix, hal_debug_to_string(sub), \
             __FILE__, __LINE__, __func__, ##args); \
     } while (0)
 
