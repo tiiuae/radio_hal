@@ -3,6 +3,8 @@
 
 #include <string>
 #include "radio_hal.h"
+#define RADIO_DEBUGFS_DIRSIZE 256
+
 enum wifi_state {
 	IF_DOWN_STATE,
 	IF_UP_STATE,
@@ -17,6 +19,7 @@ struct netlink_ctx {
 	int ifindex;
 	char ifname[RADIO_IFNAME_SIZE];
 	char phyname[RADIO_PHYNAME_SIZE];
+	char debugfs_root[RADIO_DEBUGFS_DIRSIZE];
 	struct nl_cb *if_cb;
 	struct nl_cb *link_info_cb;
 	struct nl_cb *gen_nl_cb;

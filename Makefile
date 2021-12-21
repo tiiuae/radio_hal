@@ -44,7 +44,7 @@ OBJ=$(SRC_DIR)/$(CMN_SRC_DIR)/radio_hal_main.o
 else
 OBJ=$(SRC_DIR)/$(CMN_SRC_DIR)/radio_mgmr.o
 endif
-OBJ+=$(SRC_DIR)/$(CMN_SRC_DIR)/radio_hal_yaml.o $(SRC_DIR)/$(CMN_SRC_DIR)/radio_hal_common.o $(SRC_DIR)/$(WIFI_HAL_DIR)/$(WPA_CTL_DIR)/os_unix.o $(SRC_DIR)/$(WIFI_HAL_DIR)/$(WPA_CTL_DIR)/wpa_ctrl.o $(SRC_DIR)/$(WIFI_HAL_DIR)/wifi_hal_main.o
+OBJ+=$(SRC_DIR)/$(CMN_SRC_DIR)/radio_hal_yaml.o $(SRC_DIR)/$(CMN_SRC_DIR)/radio_hal_common.o $(SRC_DIR)/$(WIFI_HAL_DIR)/$(WPA_CTL_DIR)/os_unix.o $(SRC_DIR)/$(WIFI_HAL_DIR)/$(WPA_CTL_DIR)/wpa_ctrl.o $(SRC_DIR)/$(WIFI_HAL_DIR)/wifi_stats.o $(SRC_DIR)/$(WIFI_HAL_DIR)/wifi_hal_main.o
 
 %.o: %.cpp
 	$(CXX) -c -fPIC  $(CXXFLAGS) ${COPTS} $< -o $@
