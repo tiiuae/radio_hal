@@ -1010,35 +1010,35 @@ static int wifi_hal_create_ap(struct radio_context *ctx, char *ssid, char *psk, 
 	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "SET_NETWORK %s mode 2", nw_id);
 	ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
 	if (ret || strncmp(resp_buf, "OK", 2) != 0) {
-		printf("failed to set mesh mode\n");
+		printf("failed to set AP mode\n");
 		return -1;
 	}
 
 	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "SET_NETWORK %s ssid \"%s\"", nw_id, ssid);
 	ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
 	if (ret || strncmp(resp_buf, "OK", 2) != 0) {
-		printf("failed to set mesh ssid\n");
+		printf("failed to set AP ssid\n");
 		return -1;
 	}
 
 	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "SET_NETWORK %s frequency %s", nw_id, freq);
 	ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
 	if (ret || strncmp(resp_buf, "OK", 2) != 0) {
-		printf("failed to set mesh freq\n");
+		printf("failed to set AP freq\n");
 		return -1;
 	}
 
 	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "SET_NETWORK %s key_mgmt WPA-PSK", nw_id);
 	ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
 	if (ret || strncmp(resp_buf, "OK", 2) != 0) {
-		printf("failed to set mesh key mgmt\n");
+		printf("failed to set AP key mgmt\n");
 		return -1;
 	}
 
 	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "SET_NETWORK %s psk \"%s\"", nw_id, psk);
 	ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
 	if (ret || strncmp(resp_buf, "OK", 2) != 0) {
-		printf("failed to set mesh psk\n");
+		printf("failed to set AP psk\n");
 		return -1;
 	}
 
