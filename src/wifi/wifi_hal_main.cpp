@@ -24,6 +24,7 @@
 
 #define WIFI_HAL_WPA_SOCK_PATH (const char *) "/var/run/wpa_supplicant/"
 #define WPA_SUPPLICANT_DEFAULT_CONFIG (const char *)"/tmp/wpa_supplicant.conf"
+#define WPA_SUPPLICANT_P2P_CONFIG (const char *)"/tmp/wpa_supplicant_p2p.conf"
 
 #define CMD_BUFFER_SIZE sizeof(char) * 2048
 #define MAC_ADDRESS_LENGTH sizeof(char) * 18 // aa:bb:cc:dd:ee:ff + NULL terminator
@@ -657,6 +658,28 @@ int create_default_wpa_config()
 	}
 
 	fprintf(fd, "ctrl_interface=DIR=/var/run/wpa_supplicant\n");
+	fclose(fd);
+
+	return 0;
+}
+
+int create_default_p2p_config()
+{
+	FILE *fd;
+
+	fd = fopen(WPA_SUPPLICANT_P2P_CONFIG, "w");
+	if (!fd) {
+		return -ENOMEM;
+	}
+
+	fprintf(fd, "ctrl_interface=DIR=/var/run/wpa_supplicant\n");
+	fprintf(fd, "device_name=comms_sleeve\n");
+	//Add higher intent value for p2p Go
+	fprintf(fd, "p2p_go_intent=15\n");
+	fprintf(fd, "p2p_go_ht40=1\n");
+	//Add  Device type "1-0050F204-1 (Computer / PC)"
+	fprintf(fd, "device_type=6-0050F204-1\n");
+	fprintf(fd, "driver_param=p2p_device=6\n");
 	fclose(fd);
 
 	return 0;
