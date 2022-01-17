@@ -1199,6 +1199,50 @@ static int wifi_hal_join_mesh(struct radio_context *ctx, char *ssid, char *psk, 
 	return 0;
 }
 
+static int wifi_hal_start_p2p(struct radio_context *ctx, char *device_name, char *freq)
+{
+	struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
+	char cmd_buf[CMD_BUFFER_SIZE] = {0};
+	char resp_buf[RESP_BUFFER_SIZE] = {0};
+	size_t len = sizeof(resp_buf) - 1;
+	int ret = 0;
+
+	/* restart wpa_supplicant with p2p config */
+	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "killall wpa_supplicant");
+	ret = system(cmd_buf);
+	if (ret) {
+		printf("failed to kill supplicant\n");
+		return -1;
+	}
+
+	ret = system("sleep 1");
+	if (ret) {
+		printf("warning: sleep period not successfull\n");
+	}
+
+	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "rm /var/run/wpa_supplicant/%s 2>/dev/null", sc->nl_ctx.ifname);
+	ret = wifi_hal_run_sys_cmd(cmd_buf, resp_buf, (int)len);
+	if (ret) {
+		printf("warning: failed to remove supplicant socket\n");
+	}
+
+	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf),
+					(const char*) "wpa_supplicant -dd -B -iwlan0 -Dnl80211 -c%s -f /tmp/wpa_supplicant_p2p.log",
+					WPA_SUPPLICANT_P2P_CONFIG);
+	ret = system(cmd_buf);
+	if (ret) {
+		printf("failed to start supplicant for p2p interface\n");
+		return -1;
+	}
+
+	ret = system("sleep 1");
+	if (ret) {
+		printf("warning: sleep period not successfull\n");
+	}
+
+	return 0;
+}
+
 __attribute__((unused))static int wifi_hal_ctrl_recv(struct wpa_ctrl_ctx *ctx, int index, char *reply, size_t *reply_len)
 {
 	int res;
@@ -1314,6 +1358,7 @@ static struct radio_generic_func wifi_hal_ops = {
 	.radio_connect_ap = wifi_hal_connect_ap,
 	.radio_create_ap = wifi_hal_create_ap,
 	.radio_join_mesh = wifi_hal_join_mesh,
+	.radio_start_p2p = wifi_hal_start_p2p,
 };
 
 __attribute__((unused)) int wifi_hal_register_ops(struct radio_context *ctx)

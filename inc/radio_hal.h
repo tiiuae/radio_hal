@@ -85,6 +85,7 @@ typedef struct radio_generic_func {
 	int (*radio_connect_ap)(struct radio_context *ctx, char *ssid, char *psk);
 	int (*radio_create_ap)(struct radio_context *ctx, char *ssid, char *psk, char *freq);
 	int (*radio_join_mesh)(struct radio_context *ctx, char *ssid, char *psk, char *freq);
+	int (*radio_start_p2p)(struct radio_context *ctx, char *device_name, char *freq);
 } radio_gen_func_t;
 
 struct radio_common
