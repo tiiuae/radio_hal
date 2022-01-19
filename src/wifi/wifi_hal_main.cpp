@@ -604,6 +604,24 @@ static int wifi_hal_wpa_mesh_attach(struct wifi_softc *sc)
 	return 0;
 }
 
+static int wifi_hal_wpa_p2p_attach(struct wifi_softc *sc)
+{
+	struct wpa_ctrl_ctx *ctx = &sc->wpa_ctx;
+	char sock_path[SOCKET_PATH_LENGTH] = {0};
+	int len = 0;
+
+	len += snprintf(sock_path, SOCKET_PATH_LENGTH, WIFI_HAL_WPA_SOCK_PATH);
+	/* To do: remove harcoded path */
+	len += snprintf(sock_path + len, SOCKET_PATH_LENGTH, (const char *)("p2p-dev-wlan0"));
+	ctx->mesh_ctrl = wpa_ctrl_open2(sock_path, client_socket_dir);
+	if (!ctx->mesh_ctrl) {
+		printf("Couldn't open '%s'\n", sock_path);
+		return -1;
+	}
+
+	return 0;
+}
+
 static int wifi_hal_wpa_attach(struct wifi_softc *sc)
 {
 	struct wpa_ctrl_ctx *ctx = &sc->wpa_ctx;
@@ -646,6 +664,7 @@ static void wifi_hal_wpa_dettach(struct wifi_softc *sc)
 	wpa_ctrl_close(ctx->monitor);
 	wpa_ctrl_close(ctx->ctrl);
 	wpa_ctrl_close(ctx->mesh_ctrl);
+	wpa_ctrl_close(ctx->p2p_ctrl);
 }
 
 int create_default_wpa_config()
@@ -663,7 +682,7 @@ int create_default_wpa_config()
 	return 0;
 }
 
-int create_default_p2p_config()
+static int create_default_p2p_config()
 {
 	FILE *fd;
 
@@ -1207,6 +1226,12 @@ static int wifi_hal_start_p2p(struct radio_context *ctx, char *device_name, char
 	size_t len = sizeof(resp_buf) - 1;
 	int ret = 0;
 
+	ret = create_default_p2p_config();
+	if (ret) {
+		printf("failed to create defualt p2p config\n");
+		return -1;
+	}
+
 	/* restart wpa_supplicant with p2p config */
 	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "killall wpa_supplicant");
 	ret = system(cmd_buf);
@@ -1238,6 +1263,12 @@ static int wifi_hal_start_p2p(struct radio_context *ctx, char *device_name, char
 	ret = system("sleep 1");
 	if (ret) {
 		printf("warning: sleep period not successfull\n");
+	}
+
+	ret = wifi_hal_wpa_p2p_attach(sc);
+	if (ret) {
+		printf("wpa_suplicant p2p attach failed\n");
+		return -1;
 	}
 
 	return 0;

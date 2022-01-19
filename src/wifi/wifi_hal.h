@@ -30,6 +30,7 @@ struct wpa_ctrl_ctx {
 	struct wpa_ctrl *ctrl;
 	struct wpa_ctrl *monitor;
 	struct wpa_ctrl *mesh_ctrl;
+	struct wpa_ctrl *p2p_ctrl;
 };
 
 struct wifi_softc {
