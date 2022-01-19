@@ -1218,7 +1218,7 @@ static int wifi_hal_join_mesh(struct radio_context *ctx, char *ssid, char *psk, 
 	return 0;
 }
 
-int wifi_hal_set_pbc_method(struct wifi_softc *sc)
+static int wifi_hal_set_pbc_method(struct wifi_softc *sc)
 {
 	char cmd_buf[CMD_BUFFER_SIZE] = {0};
 	char resp_buf[RESP_BUFFER_SIZE] = {0};
@@ -1285,6 +1285,37 @@ static int wifi_hal_start_p2p(struct radio_context *ctx, char *device_name, char
 	ret = wifi_hal_wpa_p2p_attach(sc);
 	if (ret) {
 		printf("wpa_suplicant p2p attach failed\n");
+		return -1;
+	}
+
+	ret = wifi_hal_set_pbc_method(sc);
+	if (ret)
+		return -1;
+
+	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "p2p_find");
+	ret = wifi_hal_send_wpa_mesh_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
+	if (ret || strncmp(resp_buf, "OK", 2) != 0) {
+		printf("failed to find p2p device\n");
+		return -1;
+	}
+
+	ret = system("sleep 1");
+	if (ret) {
+		printf("warning: sleep period not successfull\n");
+	}
+
+	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "p2p_peers");
+	ret = wifi_hal_send_wpa_mesh_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
+	if (ret) {
+		printf("failed to find p2p peers \n");
+		return -1;
+	}
+
+	/* To Do: parse and match device name for peer mac for multiple peers */
+	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "p2p_connect %s pbc", resp_buf);
+	ret = wifi_hal_send_wpa_mesh_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
+	if (ret || strncmp(resp_buf, "OK", 2) != 0) {
+		printf("failed to connect to p2p peer \n");
 		return -1;
 	}
 
