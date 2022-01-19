@@ -1218,6 +1218,23 @@ static int wifi_hal_join_mesh(struct radio_context *ctx, char *ssid, char *psk, 
 	return 0;
 }
 
+int wifi_hal_set_pbc_method(struct wifi_softc *sc)
+{
+	char cmd_buf[CMD_BUFFER_SIZE] = {0};
+	char resp_buf[RESP_BUFFER_SIZE] = {0};
+	size_t len = sizeof(resp_buf) - 1;
+	int ret;
+
+	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "set config_methods virtual_push_button");
+	ret = wifi_hal_send_wpa_mesh_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
+	if (ret || strncmp(resp_buf, "OK", 2) != 0) {
+		printf("failed to set pbc method \n");
+		return -1;
+	}
+
+	return 0;
+}
+
 static int wifi_hal_start_p2p(struct radio_context *ctx, char *device_name, char *freq)
 {
 	struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
