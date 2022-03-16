@@ -35,7 +35,6 @@ __attribute__((unused))  static const char *hal_debug_to_string(enum HAL_DEBUG h
 __attribute__((unused))  static unsigned int debug_mask = HAL_DBG_ANY;
 #define __unused __attribute__((unused))
 
-
 #define ERROR_PREFIX (const char*)"ERROR"
 #define WARN_PREFIX (const char*)"WARN"
 #define DEBUG_PREFIX (const char*)"DBG"
