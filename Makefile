@@ -11,8 +11,9 @@ INC_DIR = inc
 SRC_DIR = src
 CMN_SRC_DIR = common
 WIFI_HAL_DIR = wifi
-MODEM_HAL_DIR = modem
 WPA_CTL_DIR = wpa_socket
+MODEM_HAL_DIR = modem
+AT_CTL_DIR = at
 
 ifndef CXX
 CXX=g++
@@ -37,11 +38,13 @@ endif
 CFLAGS = -MMD -O2 -Wall -Werror -g -fPIC -I$(INC_DIR)/ \
 				-I$(SRC_DIR)/$(WIFI_HAL_DIR)/ \
 				-I$(SRC_DIR)/$(MODEM_HAL_DIR)/ \
+				-I$(SRC_DIR)/$(MODEM_HAL_DIR)/$(AT_CTL_DIR)/ \
 				-I$(SRC_DIR)/$(WIFI_HAL_DIR)/$(WPA_CTL_DIR)/ \
 				-I/usr/include/libnl3/ -std=${CSTD}
 CXXFLAGS += -MMD -O2 -Wall -Werror -g -fPIC -I$(INC_DIR)/ \
 				-I$(SRC_DIR)/$(WIFI_HAL_DIR)/ \
 				-I$(SRC_DIR)/$(MODEM_HAL_DIR)/ \
+				-I$(SRC_DIR)/$(MODEM_HAL_DIR)/$(AT_CTL_DIR)/ \
 				-I$(SRC_DIR)/$(WIFI_HAL_DIR)/$(WPA_CTL_DIR)/ \
 				-I/usr/include/libnl3/ \
 				-std=${CXXSTD}
@@ -59,19 +62,21 @@ OBJ+=$(SRC_DIR)/$(CMN_SRC_DIR)/radio_hal_yaml.o \
 				$(SRC_DIR)/$(WIFI_HAL_DIR)/$(WPA_CTL_DIR)/os_unix.o \
 				$(SRC_DIR)/$(WIFI_HAL_DIR)/$(WPA_CTL_DIR)/wpa_ctrl.o \
 				$(SRC_DIR)/$(WIFI_HAL_DIR)/wifi_hal_main.o \
-				$(SRC_DIR)/$(MODEM_HAL_DIR)/modem_hal_main.o
+				$(SRC_DIR)/$(MODEM_HAL_DIR)/modem_hal_main.o \
+				$(SRC_DIR)/$(MODEM_HAL_DIR)/$(AT_CTL_DIR)/at_tok.o \
+				$(SRC_DIR)/$(MODEM_HAL_DIR)/$(AT_CTL_DIR)/atchannel.o \
+				$(SRC_DIR)/$(MODEM_HAL_DIR)/$(AT_CTL_DIR)/misc.o \
 
 %.o: %.cpp
 	$(CXX) -c -fPIC  $(CXXFLAGS) ${COPTS} $< -o $@
 	@echo " CXX " $<
 
 %.o: %.c
-	$(CC) -c -fPIC  $(CFLAGS) ${COPTS} $< -o $@
+	$(CC) -c -fPIC  $(CFLAGS) ${COPTS} $< -o $@ -pthread
 	@echo " CC " $<
 
 libradio_hal.so: $(OBJ)
 	$(CXX) $(LDFLAGS) -o $@ $(CFLAGS) -shared -fPIC $^
-
 
 ${ALL}: libradio_hal.so
 	$(CXX) -o $@ $(CXXFLAGS) $(CXXFLAGS) -Wall $^ -L. -lradio_hal $(LDFLAGS)

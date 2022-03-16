@@ -4,7 +4,11 @@ function help
 {
 	echo
 	echo "Wifi usage: sudo $0 [ap|mesh|sta] <ssid> <psk> <ip> <mask> <freq>"
-	echo "Modem usage: sudo $0 modem <apn> <pin>"
+	echo "Modem usage:"
+	echo "    sudo $0 modem <apn> <pin>"
+	echo "    Hox!! if you are testing with ubuntu, then might need to disable modem manager:"
+	echo "    sudo systemctl stop ModemManager.service"
+	echo "    sudo systemctl disable ModemManager.service"
 	echo
 	echo "example:"
 	echo "sudo $0 mesh test 12345678 192.168.1.2 255.255.255.0 5220"
