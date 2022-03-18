@@ -5,7 +5,7 @@ function help
 	echo
 	echo "Wifi usage: sudo $0 [ap|mesh|sta] <ssid> <psk> <ip> <mask> <freq>"
 	echo "Modem usage:"
-	echo "    sudo $0 modem <apn> <pin>"
+	echo "    sudo $0 modem <apn> <pin> <at_serial_port>"
 	echo "    Hox!! if you are testing with ubuntu, then might need to disable modem manager:"
 	echo "    sudo systemctl stop ModemManager.service"
 	echo "    sudo systemctl disable ModemManager.service"
@@ -74,14 +74,19 @@ ap_activation()
 
 connect_internet()
 {
-	radio_hal_daemon -m radio_hal_connect \""$2"\" \""$3"\"
-	### get cdc-wdm device ####
-  device=$(ls /sys/class/usbmisc/ |grep cdc)
+  radio_hal_daemon -m radio_hal_get_rssi "$2" "$3" "$4"
+  #radio_hal_daemon -m radio_hal_connect "$2" "$3" "$4"
+  if [ $? -eq 0 ]; then
+    ### get cdc-wdm device ####
+    device=$(ls /sys/class/usbmisc/ |grep cdc)
 
-  ### get wwan name ###
-  wwan=$(qmicli --device=/dev/$device --get-wwan-iface)
+    ### get wwan name ###
+    wwan=$(qmicli --device=/dev/$device --get-wwan-iface)
 
-  udhcpc -q -f -n -i $wwan
+    udhcpc -q -f -n -i $wwan
+  else
+    echo "radio_hal_daemon fails"
+  fi
 }
 
 off()
@@ -130,5 +135,3 @@ main ()
 }
 
 main "$@"
-
-

@@ -8,20 +8,22 @@
 static void show_radio_hal_help()
 {
 	printf("\n------------------------- Radio HAL uses --------------------------------\n");
-	printf("./radio_hal_daemon -w <yaml configuration file wifi>\n");
-	printf("./radio_hal_daemon -b <yaml configuration file bluetooth>\n");
-	printf("./radio_hal_daemon -z <yaml configuration file 15.4 radio>\n");
+	printf("./radio_manager -w <yaml configuration file wifi>\n");
+	printf("./radio_manager -b <yaml configuration file bluetooth>\n");
+	printf("./radio_manager -z <yaml configuration file 15.4 radio>\n");
+	printf("./radio_manager -m <yaml configuration file modem>\n");
 	printf("\n-------------------------- ----------------------------------------------\n");
 }
 
 int main(int argc, char *argv[]) {
 	int c, ret = 0;
-	const char *short_opt = "w::b::z::h::";
+	const char *short_opt = "w::b::z::m::h::";
 	int long_opt_ptr;
 	struct radio_context *ctx = nullptr;
 	char ifname[RADIO_IFNAME_SIZE] = {0};
 	void *config = nullptr;
 	struct wifi_config *w_config = nullptr;
+	struct modem_config *m_config = nullptr;
 	struct radio_generic_func *radio_ops;
 	struct option long_opt[] =
 			{
@@ -43,7 +45,7 @@ int main(int argc, char *argv[]) {
 				} else
 					radio_ops = ctx->cmn.rd_func;
 
-				config = (wifi_config *)malloc(sizeof(wifi_config));
+				config = malloc(sizeof(wifi_config));
 				if (argc >= 3)
 					ret = radio_hal_yaml_config(config, (char *)argv[2], RADIO_WIFI);
 				if (ret<0)
@@ -63,15 +65,32 @@ int main(int argc, char *argv[]) {
 				ctx = radio_hal_attach(RADIO_BT);
 				if (!ctx)
 					printf("failed to attach BT Radio HAL\n");
-				config = (bt_config *)malloc(sizeof(bt_config));
+				config = malloc(sizeof(bt_config));
 				ret = radio_hal_yaml_config(config, (char *)argv[2], RADIO_BT);
 				break;
 			case 'z':
 				ctx = radio_hal_attach(RADIO_15_4);
 				if (!ctx)
 					printf("failed to attach 15.4 Radio HAL\n");
-				config = (z_config *)malloc(sizeof(z_config));
+				config = malloc(sizeof(z_config));
 				ret = radio_hal_yaml_config(config, (char *)argv[2], RADIO_15_4);
+				break;
+			case 'm':
+				ctx = radio_hal_attach(RADIO_MODEM);
+				if (!ctx || !ctx->cmn.rd_func) {
+					printf("failed to attach Wifi Radio HAL\n");
+					return -1;
+				} else
+					radio_ops = ctx->cmn.rd_func;
+
+				config = malloc(sizeof(modem_config));
+				if (argc >= 3)
+					ret = radio_hal_yaml_config(config, (char *)argv[2], RADIO_MODEM);
+				if (ret<0)
+					return -1;
+				m_config = (struct modem_config *)config;
+				radio_ops->modem_open(ctx, RADIO_MODEM, m_config);
+				radio_ops->radio_connect(ctx, m_config->apn, m_config->pin);
 				break;
 			case 'h':
 				show_radio_hal_help();
@@ -81,6 +100,7 @@ int main(int argc, char *argv[]) {
 				return (0);
 		}
 	}
+
 	return 0;
 }
 #endif

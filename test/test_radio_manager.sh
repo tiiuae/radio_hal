@@ -6,6 +6,7 @@ function help
 	echo
 	echo "example:"
 	echo "sudo $0 ../wifi_example.yaml 192.168.1.2 255.255.255.0"
+	echo "sudo $0 ../modem_example.yaml"
 
 	exit
 }
@@ -49,6 +50,18 @@ mesh_activation()
 	echo "started batadv-vis"
 }
 
+modem_activation()
+{
+  radio_manager -m $1
+  ### get cdc-wdm device ####
+  device=$(ls /sys/class/usbmisc/ |grep cdc)
+
+  ### get wwan name ###
+  wwan=$(qmicli --device=/dev/"$device" --get-wwan-iface)
+
+  udhcpc -q -f -n -i "$wwan"
+}
+
 off()
 {
 	# service off
@@ -71,6 +84,9 @@ main ()
 		*wifi*)
 			mesh_activation "$@"
 			;;
+		*modem*)
+			modem_activation "$@"
+			;;
 		off)
 			off "$@"
 			;;
@@ -81,5 +97,3 @@ main ()
 }
 
 main "$@"
-
-

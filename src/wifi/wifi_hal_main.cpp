@@ -1292,6 +1292,8 @@ static struct radio_generic_func wifi_hal_ops = {
 	.radio_connect_ap = wifi_hal_connect_ap,
 	.radio_create_ap = wifi_hal_create_ap,
 	.radio_join_mesh = wifi_hal_join_mesh,
+	.radio_connect = nullptr, //modem interface
+	.modem_open = nullptr    //modem interface
 };
 
 __attribute__((unused)) int wifi_hal_register_ops(struct radio_context *ctx)

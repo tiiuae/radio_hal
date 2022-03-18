@@ -1,6 +1,8 @@
 #ifndef RADIO_HAL_RADIO_HAL_YAML_H
 #define RADIO_HAL_RADIO_HAL_YAML_H
 
+#include "radio_hal.h"
+
 struct wifi_config {
 	bool debug;
 	int api_version;		// interface version for future purposes
@@ -32,7 +34,7 @@ struct z_config {
 struct modem_config {
 	char apn[20];			// internet APN
 	char pin[5];			// SIM pin number
-	char proto[10];			// protocol; qmicli, at,
+	char at_serial[20];	    // e.g. /dev/ttyUSB2, /dev/ttyACM4
 };
 
 

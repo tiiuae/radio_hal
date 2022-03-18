@@ -1,7 +1,9 @@
 #include <cstdio>
 #include <getopt.h>
 #include <cstring>
+#include <cstdlib>
 #include "radio_hal.h"
+#include "../src/common/radio_hal_yaml.h"
 
 
 #ifdef RADIO_HAL_UNIT_TEST
@@ -15,6 +17,7 @@ static int test_radio_hal_api(struct radio_context *ctx, char *argv[],
 	char scan_results[4096] = {0};
 	struct radio_generic_func *radio_ops = ctx->cmn.rd_func;
 	char *cmd = argv[2];
+	struct modem_config *m_config;
 
 	switch(type)
 	{
@@ -73,14 +76,23 @@ static int test_radio_hal_api(struct radio_context *ctx, char *argv[],
 		case RADIO_15_4:
 			break;
 		case RADIO_MODEM:
+			m_config = (struct modem_config *)malloc(sizeof(modem_config));
+			strncpy(m_config->at_serial, argv[5],sizeof(m_config->at_serial)-1);
 			if(!strcmp(cmd, "radio_get_hal_version")) {
-				radio_ops->open(ctx, RADIO_MODEM);
+				radio_ops->modem_open(ctx, RADIO_MODEM, m_config);
 				radio_ops->radio_get_hal_version(version);
-				printf("VERSION:%s\n", (char *) &version);
+				printf("VERSION:%s\n", version);
 			} else if(!strcmp(cmd, "radio_hal_connect")) {
-					radio_ops->open(ctx, RADIO_MODEM);
+					radio_ops->modem_open(ctx, RADIO_MODEM, m_config);
 					radio_ops->radio_connect(ctx, argv[3], argv[4]);
 					radio_ops->close(ctx, RADIO_MODEM);
+			} else if(!strcmp(cmd, "radio_hal_get_rssi")) {
+					radio_ops->modem_open(ctx, RADIO_MODEM, m_config);
+					err = radio_ops->radio_connect(ctx, argv[3], argv[4]);
+					if (!err)
+						printf("RSSI:%d dbm\n", radio_ops->radio_get_rssi(ctx, 1));
+					/* commented to keep modem alive, otherwise turns modem off */
+					//radio_ops->close(ctx, RADIO_MODEM);
 			}
 			break;
 	}
@@ -103,6 +115,7 @@ int main(int argc, char *argv[])
 	int c;
 	const char *short_opt = "w::b::z::m::h::";
 	int long_opt_ptr;
+	int err = 0;
 	struct radio_context *ctx = nullptr;
 	struct option long_opt[] =
 	{
@@ -124,7 +137,7 @@ int main(int argc, char *argv[])
 				if (!ctx)
 					printf("failed to attach Wifi Radio HAL\n");
 				if (argc >= 3)
-					test_radio_hal_api(ctx, argv, RADIO_WIFI);
+					err = test_radio_hal_api(ctx, argv, RADIO_WIFI);
 				radio_hal_dettach(ctx, RADIO_WIFI);
 				break;
 			case 'b':
@@ -142,7 +155,7 @@ int main(int argc, char *argv[])
 				if (!ctx)
 					printf("failed to attach Modem Radio HAL\n");
 				if (argc >= 3)
-					test_radio_hal_api(ctx, argv, RADIO_MODEM);
+					err = test_radio_hal_api(ctx, argv, RADIO_MODEM);
 				radio_hal_dettach(ctx, RADIO_MODEM);
 				break;
 			case 'h':
@@ -154,6 +167,6 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	return 0;
+	return err;
 }
 #endif

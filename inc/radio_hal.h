@@ -87,6 +87,7 @@ typedef struct radio_generic_func {
 	int (*radio_create_ap)(struct radio_context *ctx, char *ssid, char *psk, char *freq);
 	int (*radio_join_mesh)(struct radio_context *ctx, char *ssid, char *psk, char *freq);
 	int (*radio_connect)(struct radio_context *ctx, char *apn, char *pin);
+	int (*modem_open)(struct radio_context *ctx, enum radio_type type, struct modem_config *config);
 } radio_gen_func_t;
 
 struct radio_common
