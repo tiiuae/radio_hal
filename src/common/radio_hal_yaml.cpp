@@ -3,19 +3,20 @@
 #include <yaml.h>
 #include "radio_hal.h"
 #include "radio_hal_yaml.h"
+#include "debug.h"
 
 #if not defined RADIO_HAL_UNIT_TEST
 static int debug = 1;
 
 static int radio_hal_yaml_bt_config(struct bt_config* conf_struct, char *key, char *value) {
 	if (debug)
-		printf("radio_hal_bt_config: key: %s value: %s\n", key, value);
+		hal_debug(HAL_DBG_BT, "radio_hal_bt_config: key: %s value: %s\n", key, value);
 	return 0;
 }
 
 static int radio_hal_yaml_z_config(struct z_config* conf_struct, char *key, char *value) {
 	if (debug)
-		printf("radio_hal_z_config: key: %s value: %s\n", key, value);
+		hal_debug(HAL_DBG_BT, "radio_hal_z_config: key: %s value: %s\n", key, value);
 	return 0;
 }
 
@@ -23,7 +24,7 @@ static int radio_hal_yaml_wifi_config(struct wifi_config* conf_struct, char *key
 {
 	/* TODO concurrency with single radio? */
 	if (debug)
-		printf("radio_hal_wifi_config: key: %s value: %s\n", key, value);
+		hal_debug(HAL_DBG_WIFI, "radio_hal_wifi_config: key: %s value: %s\n", key, value);
 
 	if(!strcmp(key, "debug")) {
 		conf_struct->debug = false;
@@ -58,14 +59,14 @@ static int radio_hal_yaml_wifi_config(struct wifi_config* conf_struct, char *key
 	} else if(!strcmp(key, "type")) {
 		//conf_struct->type
 	} else
-		printf("no data structure for key!\n");
+		hal_warn(HAL_DBG_WIFI, "no data structure for key!\n");
 
 	return 0;
 }
 
 static int radio_hal_yaml_modem_config(struct modem_config* conf_struct, char *key, char *value) {
 	if (debug)
-		printf("radio_hal_modem_config: key: %s value: %s\n", key, value);
+		hal_debug(HAL_DBG_MODEM, "radio_hal_modem_config: key: %s value: %s\n", key, value);
 
 	if(!strcmp(key, "apn")) {
 		strcpy(conf_struct->apn, value);
@@ -74,7 +75,7 @@ static int radio_hal_yaml_modem_config(struct modem_config* conf_struct, char *k
 	} else if(!strcmp(key, "at_serial")) {
 		strcpy(conf_struct->at_serial, value);
 	} else
-		printf("no data structure for key!\n");
+		hal_warn(HAL_DBG_MODEM, "no data structure for key!\n");
 	return 0;
 }
 
@@ -87,7 +88,7 @@ int radio_hal_yaml_config(void *conf_struct, const char* yaml_file, radio_type r
 
 	FILE *configuration = fopen(yaml_file, "r");
 	if (!configuration) {
-		printf("Failed to open %s!\n", yaml_file);
+		hal_err(HAL_DBG_COMMON, "Failed to open %s!\n", yaml_file);
 		return -1;
 	}
 
@@ -95,7 +96,7 @@ int radio_hal_yaml_config(void *conf_struct, const char* yaml_file, radio_type r
 
 	/* Initialize parser */
 	if(!yaml_parser_initialize(&parser)) {
-		printf("Failed to open parser\n");
+		hal_err(HAL_DBG_COMMON, "Failed to open parser\n");
 		fclose(configuration);
 		return -1;
 	}
@@ -141,7 +142,7 @@ int radio_hal_yaml_config(void *conf_struct, const char* yaml_file, radio_type r
 							ret = radio_hal_yaml_modem_config((struct modem_config*)conf_struct, temp_key, (char *)token.data.scalar.value);
 							break;
 						default:
-							printf("radio not supported for yaml parsing!\n");
+							hal_warn(HAL_DBG_COMMON, "radio not supported for yaml parsing!\n");
 							break;
 					}
 				}
