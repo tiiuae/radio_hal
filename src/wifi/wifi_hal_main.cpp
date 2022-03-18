@@ -131,7 +131,7 @@ static int wifi_hal_get_phyname(struct wifi_softc *sc, char *cmd, char *resp_buf
 	}
 
 	if (debug)
-		hal_err(HAL_DBG_WIFI, "phyname |%s|\n", resp_buf);
+		hal_debug(HAL_DBG_WIFI, "phyname |%s|\n", resp_buf);
 
 	return 0;
 }
@@ -824,7 +824,7 @@ static int wifi_hal_send_wpa_command(struct wpa_ctrl_ctx *ctx, int index, const 
 
 	if (debug) {
 		resp[*resp_size] = '\0';
-		hal_info(HAL_DBG_WIFI, "%s:%s\n", cmd, resp);
+		hal_debug(HAL_DBG_WIFI, "%s:%s\n", cmd, resp);
 		if (*resp_size > 0 && resp[*resp_size - 1] != '\n')
 			printf("\n");
 	}
@@ -837,13 +837,13 @@ static int wifi_hal_send_wpa_mesh_command(struct wpa_ctrl_ctx *ctx, int index, c
 	int ret;
 
 	if (!ctx->mesh_ctrl) {
-		hal_info(HAL_DBG_WIFI, "ctrl socket not connected '%s' and cmd drooped:%s\n", WIFI_HAL_WPA_SOCK_PATH, cmd);
+		hal_err(HAL_DBG_WIFI, "ctrl socket not connected '%s' and cmd drooped:%s\n", WIFI_HAL_WPA_SOCK_PATH, cmd);
 		return -1;
 	}
 
 	ret = wpa_ctrl_request(ctx->mesh_ctrl, cmd, strlen(cmd), resp, (size_t *)resp_size, nullptr);
 	if (ret == -2) {
-		hal_info(HAL_DBG_WIFI, "'%s' command timed out.\n", cmd);
+		hal_err(HAL_DBG_WIFI, "'%s' command timed out.\n", cmd);
 		return -2;
 	} else if (ret < 0 || strncmp(resp, "FAIL", 4) == 0) {
 		return -1;

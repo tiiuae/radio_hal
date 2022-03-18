@@ -143,17 +143,17 @@ int main(int argc, char *argv[])
 			case 'b':
 				ctx = radio_hal_attach(RADIO_BT);
 				if (!ctx)
-					hal_err(HAL_DBG_WIFI, "failed to attach BT Radio HAL\n");
+					hal_err(HAL_DBG_BT, "failed to attach BT Radio HAL\n");
 				break;
 			case 'z':
 				ctx = radio_hal_attach(RADIO_15_4);
 				if (!ctx)
-					hal_err(HAL_DBG_WIFI, "failed to attach 15.4 Radio HAL\n");
+					hal_err(HAL_DBG_BT, "failed to attach 15.4 Radio HAL\n");
 				break;
 			case 'm':
 				ctx = radio_hal_attach(RADIO_MODEM);
 				if (!ctx)
-					hal_err(HAL_DBG_WIFI, "failed to attach Modem Radio HAL\n");
+					hal_err(HAL_DBG_MODEM, "failed to attach Modem Radio HAL\n");
 				if (argc >= 3)
 					err = test_radio_hal_api(ctx, argv, RADIO_MODEM);
 				radio_hal_dettach(ctx, RADIO_MODEM);
@@ -162,7 +162,7 @@ int main(int argc, char *argv[])
 				show_radio_hal_help();
 				return(0);
 			default:
-				hal_err(HAL_DBG_WIFI, "Argument not supported: %c\n", c);
+				hal_err(HAL_DBG_COMMON, "Argument not supported: %c\n", c);
 				return(0);
 		}
 	}
