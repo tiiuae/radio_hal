@@ -1,6 +1,7 @@
 #include <unistd.h>
 #include <cstdint>
 #include <cstdarg>
+#include <cerrno>
 #include "radio_hal.h"
 #include "wifi_hal.h"
 #include <netlink/attr.h>
@@ -33,7 +34,7 @@
 #define CONFIG_PROVISION_MACADDR
 
 static const char *client_socket_dir = nullptr;
-static int debug = 1;
+static int debug;
 
 static int wifi_hal_nl_finish_handler(struct nl_msg *msg, void *arg)
 {
@@ -610,7 +611,7 @@ static int wifi_hal_wpa_attach(struct wifi_softc *sc)
 	int len = 0;
 
 	/* Initialise even not used */
-	ctx->mesh_ctrl = (wpa_ctrl *)0;
+	ctx->mesh_ctrl = (wpa_ctrl *) nullptr;
 
 	len += snprintf(sock_path, SOCKET_PATH_LENGTH, WIFI_HAL_WPA_SOCK_PATH);
 	len += snprintf(sock_path + len, SOCKET_PATH_LENGTH, "%s", (const char *)(sc->nl_ctx.ifname));
@@ -1291,6 +1292,8 @@ static struct radio_generic_func wifi_hal_ops = {
 	.radio_connect_ap = wifi_hal_connect_ap,
 	.radio_create_ap = wifi_hal_create_ap,
 	.radio_join_mesh = wifi_hal_join_mesh,
+	.radio_connect = nullptr, //modem interface
+	.modem_open = nullptr    //modem interface
 };
 
 __attribute__((unused)) int wifi_hal_register_ops(struct radio_context *ctx)

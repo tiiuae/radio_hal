@@ -18,6 +18,7 @@ enum radio_type {
 	RADIO_WIFI,
 	RADIO_BT,
 	RADIO_15_4,
+	RADIO_MODEM,
 };
 
 enum radio_feature {
@@ -85,6 +86,8 @@ typedef struct radio_generic_func {
 	int (*radio_connect_ap)(struct radio_context *ctx, char *ssid, char *psk);
 	int (*radio_create_ap)(struct radio_context *ctx, char *ssid, char *psk, char *freq);
 	int (*radio_join_mesh)(struct radio_context *ctx, char *ssid, char *psk, char *freq);
+	int (*radio_connect)(struct radio_context *ctx, char *apn, char *pin);
+	int (*modem_open)(struct radio_context *ctx, enum radio_type type, struct modem_config *config);
 } radio_gen_func_t;
 
 struct radio_common
@@ -104,5 +107,4 @@ struct radio_context
 
 struct radio_context* radio_hal_attach(enum radio_type type);
 int radio_hal_dettach(struct radio_context *ctx, enum radio_type type);
-
 #endif

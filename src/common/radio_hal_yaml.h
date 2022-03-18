@@ -1,6 +1,8 @@
 #ifndef RADIO_HAL_RADIO_HAL_YAML_H
 #define RADIO_HAL_RADIO_HAL_YAML_H
 
+#include "radio_hal.h"
+
 struct wifi_config {
 	bool debug;
 	int api_version;		// interface version for future purposes
@@ -27,6 +29,12 @@ struct bt_config {
 
 struct z_config {
 	bool debug;
+};
+
+struct modem_config {
+	char apn[20];			// internet APN
+	char pin[5];			// SIM pin number
+	char at_serial[20];	    // e.g. /dev/ttyUSB2, /dev/ttyACM4
 };
 
 

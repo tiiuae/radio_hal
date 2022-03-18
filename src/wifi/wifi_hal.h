@@ -1,8 +1,6 @@
 #ifndef __WIFI_HAL_H__
 #define __WIFI_HAL_H__
 
-#include <string>
-#include "radio_hal.h"
 enum wifi_state {
 	IF_DOWN_STATE,
 	IF_UP_STATE,

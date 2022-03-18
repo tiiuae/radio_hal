@@ -16,7 +16,7 @@ enum HAL_DEBUG {
 	HAL_DBG_ANY = 0xffffffff
 };
 
-static const char *hal_debug_to_string(enum HAL_DEBUG hal_debug) {
+__attribute__((unused))  static const char *hal_debug_to_string(enum HAL_DEBUG hal_debug) {
 	switch (hal_debug) {
 		case HAL_DBG_WIFI:
 			return "WIFI";
@@ -32,7 +32,8 @@ static const char *hal_debug_to_string(enum HAL_DEBUG hal_debug) {
 }
 
 #if (defined DEBUG) && DEBUG == 1
-static unsigned int debug_mask = HAL_DBG_ANY;
+__attribute__((unused))  static unsigned int debug_mask = HAL_DBG_ANY;
+#define __unused __attribute__((unused))
 
 #define ERROR_PREFIX (const char*)"ERROR"
 #define WARN_PREFIX (const char*)"WARN"
@@ -51,6 +52,16 @@ static unsigned int debug_mask = HAL_DBG_ANY;
     if (debug_mask & sub) \
             fprintf(stderr, "%-5s:%-6s: %s:%d:%s(): " fmt, prefix, hal_debug_to_string(sub), \
             __FILE__, __LINE__, __func__, ##args); \
+    } while (0)
+
+#define RLOGE(fmt, args...) \
+    do {        \
+            fprintf(stdout, "ERROR:MODEM : AT error:" fmt, ##args); \
+    } while (0)
+
+#define RLOGD(fmt, args...) \
+    do {        \
+            fprintf(stdout, "INFO :MODEM : AT debug:" fmt, ##args); \
     } while (0)
 
 #else // #if (defined DEBUG) && DEBUG == 1

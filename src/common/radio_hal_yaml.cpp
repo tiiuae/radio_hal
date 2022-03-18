@@ -63,6 +63,21 @@ static int radio_hal_yaml_wifi_config(struct wifi_config* conf_struct, char *key
 	return 0;
 }
 
+static int radio_hal_yaml_modem_config(struct modem_config* conf_struct, char *key, char *value) {
+	if (debug)
+		printf("radio_hal_modem_config: key: %s value: %s\n", key, value);
+
+	if(!strcmp(key, "apn")) {
+		strcpy(conf_struct->apn, value);
+	} else if(!strcmp(key, "pin")) {
+		strcpy(conf_struct->pin, value);
+	} else if(!strcmp(key, "at_serial")) {
+		strcpy(conf_struct->at_serial, value);
+	} else
+		printf("no data structure for key!\n");
+	return 0;
+}
+
 int radio_hal_yaml_config(void *conf_struct, const char* yaml_file, radio_type radio)
 {
 	int ret = 0;
@@ -121,6 +136,9 @@ int radio_hal_yaml_config(void *conf_struct, const char* yaml_file, radio_type r
 							break;
 						case RADIO_15_4:
 							ret = radio_hal_yaml_z_config((struct z_config*)conf_struct, temp_key, (char *)token.data.scalar.value);
+							break;
+						case RADIO_MODEM:
+							ret = radio_hal_yaml_modem_config((struct modem_config*)conf_struct, temp_key, (char *)token.data.scalar.value);
 							break;
 						default:
 							printf("radio not supported for yaml parsing!\n");
