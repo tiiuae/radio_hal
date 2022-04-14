@@ -146,12 +146,12 @@ static int modem_hal_check_modem() {
 	err = at_send_command_singleline("AT+GMI", "", &at_response);
 	if (err != 0)
 		goto error;
-	strncpy(manufacturer, at_response->p_intermediates->line, mm_lenght);
+	strncpy(manufacturer, at_response->p_intermediates->line, sizeof(manufacturer)-1);
 
 	err = at_send_command_singleline("AT+GMM", "", &at_response);
 	if (err != 0)
 		goto error;
-	strncpy(model, at_response->p_intermediates->line, mm_lenght);
+	strncpy(model, at_response->p_intermediates->line, sizeof(model)-1);
 
 
 	hal_info(HAL_DBG_MODEM, "Manufacturer: %s\n", manufacturer);
