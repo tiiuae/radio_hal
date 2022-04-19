@@ -1,8 +1,8 @@
-#include <cstdio>
 #include <getopt.h>
 #include <cstdlib>
 #include "radio_hal.h"
 #include "radio_hal_yaml.h"
+#include "debug.h"
 
 #ifndef RADIO_HAL_UNIT_TEST
 static void show_radio_hal_help()
@@ -34,13 +34,13 @@ int main(int argc, char *argv[]) {
 			};
 
 
-	printf("*  argc = %d argv = %s %s\n", argc, argv[0], argv[2]);
+	hal_info(HAL_DBG_COMMON, "*  argc = %d argv = %s %s\n", argc, argv[0], argv[2]);
 	while ((c = getopt_long(argc, argv, short_opt, long_opt, &long_opt_ptr)) != -1) {
 		switch (c) {
 			case 'w':
 				ctx = radio_hal_attach(RADIO_WIFI);
 				if (!ctx || !ctx->cmn.rd_func) {
-					printf("failed to attach Wifi Radio HAL\n");
+					hal_err(HAL_DBG_WIFI, "failed to attach Wifi Radio HAL\n");
 					return -1;
 				} else
 					radio_ops = ctx->cmn.rd_func;
@@ -64,21 +64,21 @@ int main(int argc, char *argv[]) {
 			case 'b':
 				ctx = radio_hal_attach(RADIO_BT);
 				if (!ctx)
-					printf("failed to attach BT Radio HAL\n");
+					hal_err(HAL_DBG_BT, "failed to attach BT Radio HAL\n");
 				config = malloc(sizeof(bt_config));
 				ret = radio_hal_yaml_config(config, (char *)argv[2], RADIO_BT);
 				break;
 			case 'z':
 				ctx = radio_hal_attach(RADIO_15_4);
 				if (!ctx)
-					printf("failed to attach 15.4 Radio HAL\n");
+					hal_err(HAL_DBG_BT, "failed to attach 15.4 Radio HAL\n");
 				config = malloc(sizeof(z_config));
 				ret = radio_hal_yaml_config(config, (char *)argv[2], RADIO_15_4);
 				break;
 			case 'm':
 				ctx = radio_hal_attach(RADIO_MODEM);
 				if (!ctx || !ctx->cmn.rd_func) {
-					printf("failed to attach Wifi Radio HAL\n");
+					hal_err(HAL_DBG_MODEM, "failed to attach Wifi Radio HAL\n");
 					return -1;
 				} else
 					radio_ops = ctx->cmn.rd_func;
@@ -96,7 +96,7 @@ int main(int argc, char *argv[]) {
 				show_radio_hal_help();
 				return (0);
 			default:
-				printf("Argument not supported: %c\n", c);
+				hal_warn(HAL_DBG_COMMON, "Argument not supported: %c\n", c);
 				return (0);
 		}
 	}

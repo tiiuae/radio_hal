@@ -1,8 +1,8 @@
-#include <cstdio>
 #include <getopt.h>
 #include <cstring>
 #include <cstdlib>
 #include "radio_hal.h"
+#include "debug.h"
 #include "../src/common/radio_hal_yaml.h"
 
 
@@ -25,39 +25,39 @@ static int test_radio_hal_api(struct radio_context *ctx, char *argv[],
 			if(!strcmp(cmd, "radio_get_hal_version")) {
 				radio_ops->open(ctx, RADIO_WIFI);
 				radio_ops->radio_get_hal_version(version);
-				printf("VERSION:%s\n", (char*) &version);
+				hal_info(HAL_DBG_WIFI, "VERSION:%s\n", (char*) &version);
 				radio_ops->close(ctx, RADIO_WIFI);
 			} else if(!strcmp(cmd, "radio_hal_get_iface_name")) {
 				radio_ops->open(ctx, RADIO_WIFI);
 				radio_ops->radio_get_iface_name(ctx, ifname, 1);
-				printf("IFNAME:%s\n", (char*) &ifname);
+				hal_info(HAL_DBG_WIFI, "IFNAME:%s\n", (char*) &ifname);
 				radio_ops->close(ctx, RADIO_WIFI);
 			} else if(!strcmp(cmd, "radio_hal_get_rssi")) {
 				radio_ops->open(ctx, RADIO_WIFI);
-				printf("RSSI:%d dbm\n", radio_ops->radio_get_rssi(ctx, 1));
+				hal_info(HAL_DBG_WIFI, "RSSI:%d dbm\n", radio_ops->radio_get_rssi(ctx, 1));
 				radio_ops->close(ctx, RADIO_WIFI);
 			} else if(!strcmp(cmd, "radio_hal_get_txrate")) {
 				radio_ops->open(ctx, RADIO_WIFI);
-				printf("TXRATE:%d MBit/s\n", radio_ops->radio_get_txrate(ctx, 1));
+				hal_info(HAL_DBG_WIFI, "TXRATE:%d MBit/s\n", radio_ops->radio_get_txrate(ctx, 1));
 				radio_ops->close(ctx, RADIO_WIFI);
 			} else if(!strcmp(cmd, "radio_hal_get_rxrate")) {
 				radio_ops->open(ctx, RADIO_WIFI);
-				printf("RXRATE:%d MBit/s\n", radio_ops->radio_get_rxrate(ctx, 1));
+				hal_info(HAL_DBG_WIFI, "RXRATE:%d MBit/s\n", radio_ops->radio_get_rxrate(ctx, 1));
 				radio_ops->close(ctx, RADIO_WIFI);
 			} else if(!strcmp(cmd, "radio_hal_get_macaddr")) {
 				radio_ops->open(ctx, RADIO_WIFI);
 				radio_ops->radio_get_mac_address(ctx, mac_addr, 1);
-				printf("MACADDR:%s \n", mac_addr);
+				hal_info(HAL_DBG_WIFI, "MACADDR:%s \n", mac_addr);
 				radio_ops->close(ctx, RADIO_WIFI);
 			} else if(!strcmp(cmd, "radio_hal_get_scan_result")) {
 				radio_ops->open(ctx, RADIO_WIFI);
 				radio_ops->radio_get_scan_results(ctx, scan_results);
-				printf("%s\n", scan_results);
+				hal_info(HAL_DBG_WIFI, "%s\n", scan_results);
 				radio_ops->close(ctx, RADIO_WIFI);
 			} else if(!strcmp(cmd, "radio_hal_connect_ap")) {
 				radio_ops->open(ctx, RADIO_WIFI);
 				radio_ops->radio_get_scan_results(ctx, scan_results);
-				printf("%s\n", scan_results);
+				hal_info(HAL_DBG_WIFI, "%s\n", scan_results);
 				radio_ops->radio_connect_ap(ctx, argv[3], argv[4]);
 				radio_ops->close(ctx, RADIO_WIFI);
 			} else if(!strcmp(cmd, "radio_hal_create_ap")) {
@@ -81,7 +81,7 @@ static int test_radio_hal_api(struct radio_context *ctx, char *argv[],
 			if(!strcmp(cmd, "radio_get_hal_version")) {
 				radio_ops->modem_open(ctx, RADIO_MODEM, m_config);
 				radio_ops->radio_get_hal_version(version);
-				printf("VERSION:%s\n", version);
+				hal_info(HAL_DBG_MODEM, "VERSION:%s\n", version);
 			} else if(!strcmp(cmd, "radio_hal_connect")) {
 					radio_ops->modem_open(ctx, RADIO_MODEM, m_config);
 					radio_ops->radio_connect(ctx, argv[3], argv[4]);
@@ -90,7 +90,7 @@ static int test_radio_hal_api(struct radio_context *ctx, char *argv[],
 					radio_ops->modem_open(ctx, RADIO_MODEM, m_config);
 					err = radio_ops->radio_connect(ctx, argv[3], argv[4]);
 					if (!err)
-						printf("RSSI:%d dbm\n", radio_ops->radio_get_rssi(ctx, 1));
+						hal_info(HAL_DBG_MODEM, "RSSI:%d dbm\n", radio_ops->radio_get_rssi(ctx, 1));
 					/* commented to keep modem alive, otherwise turns modem off */
 					//radio_ops->close(ctx, RADIO_MODEM);
 			}
@@ -135,7 +135,7 @@ int main(int argc, char *argv[])
 			case 'w':
 				ctx = radio_hal_attach(RADIO_WIFI);
 				if (!ctx)
-					printf("failed to attach Wifi Radio HAL\n");
+					hal_err(HAL_DBG_WIFI, "failed to attach Wifi Radio HAL\n");
 				if (argc >= 3)
 					err = test_radio_hal_api(ctx, argv, RADIO_WIFI);
 				radio_hal_dettach(ctx, RADIO_WIFI);
@@ -143,17 +143,17 @@ int main(int argc, char *argv[])
 			case 'b':
 				ctx = radio_hal_attach(RADIO_BT);
 				if (!ctx)
-					printf("failed to attach BT Radio HAL\n");
+					hal_err(HAL_DBG_BT, "failed to attach BT Radio HAL\n");
 				break;
 			case 'z':
 				ctx = radio_hal_attach(RADIO_15_4);
 				if (!ctx)
-					printf("failed to attach 15.4 Radio HAL\n");
+					hal_err(HAL_DBG_BT, "failed to attach 15.4 Radio HAL\n");
 				break;
 			case 'm':
 				ctx = radio_hal_attach(RADIO_MODEM);
 				if (!ctx)
-					printf("failed to attach Modem Radio HAL\n");
+					hal_err(HAL_DBG_MODEM, "failed to attach Modem Radio HAL\n");
 				if (argc >= 3)
 					err = test_radio_hal_api(ctx, argv, RADIO_MODEM);
 				radio_hal_dettach(ctx, RADIO_MODEM);
@@ -162,7 +162,7 @@ int main(int argc, char *argv[])
 				show_radio_hal_help();
 				return(0);
 			default:
-				printf("Argument not supported: %c\n", c);
+				hal_err(HAL_DBG_COMMON, "Argument not supported: %c\n", c);
 				return(0);
 		}
 	}

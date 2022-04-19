@@ -49,7 +49,6 @@ __attribute__((unused))  static unsigned int debug_mask = HAL_DBG_ANY;
 
 #define hal_print_critical(sub, prefix, fmt, args...) \
     do {        \
-    if (debug_mask & sub) \
             fprintf(stderr, "%-5s:%-6s: %s:%d:%s(): " fmt, prefix, hal_debug_to_string(sub), \
             __FILE__, __LINE__, __func__, ##args); \
     } while (0)
