@@ -1,6 +1,8 @@
 #ifndef __RADIO_HAL_H__
 #define __RADIO_HAL_H__
 
+#include <sys/msg.h>
+
 #define RADIO_IFNAME_SIZE 16
 #define RADIO_PHYNAME_SIZE 8
 #define RADIO_HAL_VERSION_SIZE 32
@@ -19,6 +21,7 @@ enum radio_type {
 	RADIO_BT,
 	RADIO_15_4,
 	RADIO_MODEM,
+	RADIO_MAX,  /* Don't remove */
 };
 
 enum radio_feature {
@@ -83,11 +86,10 @@ typedef struct radio_generic_func {
 	int (* radio_get_txrate) (struct radio_context *ctx, int radio_index);
 	int (* radio_get_rxrate) (struct radio_context *ctx, int radio_index);
 	int (* radio_get_scan_results)(struct radio_context *ctx, char *results);
-	int (*radio_connect_ap)(struct radio_context *ctx, char *ssid, char *psk);
-	int (*radio_create_ap)(struct radio_context *ctx, char *ssid, char *psk, char *freq);
-	int (*radio_join_mesh)(struct radio_context *ctx, char *ssid, char *psk, char *freq);
-	int (*radio_connect)(struct radio_context *ctx, char *apn, char *pin);
-	int (*modem_open)(struct radio_context *ctx, enum radio_type type, struct modem_config *config);
+	int (*radio_connect_ap)(struct radio_context *ctx);
+	int (*radio_create_ap)(struct radio_context *ctx);
+	int (*radio_join_mesh)(struct radio_context *ctx);
+	int (*radio_connect)(struct radio_context *ctx);
 } radio_gen_func_t;
 
 struct radio_common
@@ -103,7 +105,21 @@ struct radio_context
 {
 	struct radio_common cmn;
 	void *radio_private;
+	void *config;
 };
+
+// structure for message queue and messaging
+struct radio_hal_msg_buffer {
+	long mtype;  // as receiver 0x80000000 or'ed with radio_type
+	enum radio_type msg_sender;
+	int msg_event;
+	char msg_text[50];
+};
+
+key_t radio_hal_msg_queue_init(enum radio_type radio, int *msg_id, int proj_id);
+int radio_hal_msg_queue_destroy(enum radio_type radio, int msg_id);
+int radio_hal_msg_recv(struct radio_hal_msg_buffer *msg, int msg_id, enum radio_type radio);
+int radio_hal_msg_send(struct radio_hal_msg_buffer *msg, int msg_id, enum radio_type radio, bool high_prio);
 
 struct radio_context* radio_hal_attach(enum radio_type type);
 int radio_hal_dettach(struct radio_context *ctx, enum radio_type type);

@@ -1,4 +1,3 @@
-#include <cstdio>
 #include <cstring>
 #include <yaml.h>
 #include "radio_hal.h"
@@ -37,27 +36,27 @@ static int radio_hal_yaml_wifi_config(struct wifi_config* conf_struct, char *key
 	} else if(!strcmp(key, "frequency")) {
 		strcpy(conf_struct->freq, value);
 	} else if(!strcmp(key, "api_version")) {
-		// conf_struct->api_version
+		//strcpy(conf_struct->api_version, value);
 	} else if(!strcmp(key, "passphrase")) {
-		//conf_struct->passphrase
+		strcpy(conf_struct->passphrase, value);
 	} else if(!strcmp(key, "enc")) {
-		//conf_struct->enc
+		strcpy(conf_struct->enc, value);
 	} else if(!strcmp(key, "ap_mac")) {
-		//conf_struct->ap_mac_addr
+		strcpy(conf_struct->ap_mac_addr, value);
 	} else if(!strcmp(key, "country")) {
-		//conf_struct->country
+		strcpy(conf_struct->country, value);
 	} else if(!strcmp(key, "bw")) {
-		//conf_struct->bw
+		strcpy(conf_struct->bw, value);
 	} else if(!strcmp(key, "preamble")) {
-		//conf_struct->preamble
+		strcpy(conf_struct->preamble, value);
 	} else if(!strcmp(key, "distance")) {
-		//conf_struct->distance
+		//strcpy(conf_struct->distance, value);
 	} else if(!strcmp(key, "tx_power")) {
-		//conf_struct->tx_power
+		//strcpy(conf_struct->tx_power, value);
 	} else if(!strcmp(key, "mode")) {
-		//conf_struct->mode
+		strcpy(conf_struct->mode, value);
 	} else if(!strcmp(key, "type")) {
-		//conf_struct->type
+		strcpy(conf_struct->type, value);
 	} else
 		hal_warn(HAL_DBG_WIFI, "no data structure for key!\n");
 

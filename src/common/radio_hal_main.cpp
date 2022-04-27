@@ -3,7 +3,7 @@
 #include <cstdlib>
 #include "radio_hal.h"
 #include "debug.h"
-#include "../src/common/radio_hal_yaml.h"
+#include "radio_hal_yaml.h"
 
 
 #ifdef RADIO_HAL_UNIT_TEST
@@ -17,11 +17,17 @@ static int test_radio_hal_api(struct radio_context *ctx, char *argv[],
 	char scan_results[4096] = {0};
 	struct radio_generic_func *radio_ops = ctx->cmn.rd_func;
 	char *cmd = argv[2];
+	struct wifi_config *w_config;
 	struct modem_config *m_config;
 
 	switch(type)
 	{
 		case RADIO_WIFI:
+			w_config = (struct wifi_config *)malloc(sizeof(wifi_config));
+			strncpy(w_config->ssid, argv[3],sizeof(w_config->ssid)-1);
+			strncpy(w_config->key, argv[4],sizeof(w_config->key)-1);
+			strncpy(w_config->freq, argv[5],sizeof(w_config->freq)-1);
+
 			if(!strcmp(cmd, "radio_get_hal_version")) {
 				radio_ops->open(ctx, RADIO_WIFI);
 				radio_ops->radio_get_hal_version(version);
@@ -58,16 +64,16 @@ static int test_radio_hal_api(struct radio_context *ctx, char *argv[],
 				radio_ops->open(ctx, RADIO_WIFI);
 				radio_ops->radio_get_scan_results(ctx, scan_results);
 				hal_info(HAL_DBG_WIFI, "%s\n", scan_results);
-				radio_ops->radio_connect_ap(ctx, argv[3], argv[4]);
+				radio_ops->radio_connect_ap(ctx);
 				radio_ops->close(ctx, RADIO_WIFI);
 			} else if(!strcmp(cmd, "radio_hal_create_ap")) {
 				radio_ops->open(ctx, RADIO_WIFI);
-				radio_ops->radio_create_ap(ctx, argv[3], argv[4], argv[5]);
+				radio_ops->radio_create_ap(ctx);
 				radio_ops->close(ctx, RADIO_WIFI);
 			} else if(!strcmp(cmd, "radio_mesh_join")) {
 				radio_ops->open(ctx, RADIO_WIFI);
 				radio_ops->radio_get_iface_name(ctx, ifname, 1);
-				radio_ops->radio_join_mesh(ctx, argv[3], argv[4], argv[5]);
+				radio_ops->radio_join_mesh(ctx);
 				radio_ops->close(ctx, RADIO_WIFI);
 			}
 			break;
@@ -78,21 +84,22 @@ static int test_radio_hal_api(struct radio_context *ctx, char *argv[],
 		case RADIO_MODEM:
 			m_config = (struct modem_config *)malloc(sizeof(modem_config));
 			strncpy(m_config->at_serial, argv[5],sizeof(m_config->at_serial)-1);
+
 			if(!strcmp(cmd, "radio_get_hal_version")) {
-				radio_ops->modem_open(ctx, RADIO_MODEM, m_config);
+				radio_ops->open(ctx, RADIO_MODEM);
 				radio_ops->radio_get_hal_version(version);
 				hal_info(HAL_DBG_MODEM, "VERSION:%s\n", version);
 			} else if(!strcmp(cmd, "radio_hal_connect")) {
-					radio_ops->modem_open(ctx, RADIO_MODEM, m_config);
-					radio_ops->radio_connect(ctx, argv[3], argv[4]);
-					radio_ops->close(ctx, RADIO_MODEM);
+				radio_ops->open(ctx, RADIO_MODEM);
+				radio_ops->radio_connect(ctx);
+				radio_ops->close(ctx, RADIO_MODEM);
 			} else if(!strcmp(cmd, "radio_hal_get_rssi")) {
-					radio_ops->modem_open(ctx, RADIO_MODEM, m_config);
-					err = radio_ops->radio_connect(ctx, argv[3], argv[4]);
-					if (!err)
-						hal_info(HAL_DBG_MODEM, "RSSI:%d dbm\n", radio_ops->radio_get_rssi(ctx, 1));
-					/* commented to keep modem alive, otherwise turns modem off */
-					//radio_ops->close(ctx, RADIO_MODEM);
+				radio_ops->open(ctx, RADIO_MODEM);
+				err = radio_ops->radio_connect(ctx);
+				if (!err)
+					hal_info(HAL_DBG_MODEM, "RSSI:%d dbm\n", radio_ops->radio_get_rssi(ctx, 1));
+				/* commented to keep modem alive, otherwise turns modem off */
+				//radio_ops->close(ctx, RADIO_MODEM);
 			}
 			break;
 	}

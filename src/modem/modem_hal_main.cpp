@@ -1,6 +1,9 @@
 #include <cstring>
 #include <stdarg.h>
 #include <fcntl.h>
+#include <sys/ipc.h>
+#include <sys/msg.h>
+//#include <semaphore.h>
 #include <unistd.h>
 #include "radio_hal.h"
 #include "modem_hal.h"
@@ -9,7 +12,9 @@
 #include "at/misc.h"
 #include "at/ril.h"
 #include "debug.h"
-#include "../common/radio_hal_yaml.h"
+#include "radio_hal_yaml.h"
+#include "modem_events.h"
+
 
 #define CMD_BUFFER_SIZE sizeof(char) * 2048
 #define MAC_ADDRESS_LENGTH sizeof(char) * 18 // aa:bb:cc:dd:ee:ff + NULL terminator
@@ -19,9 +24,124 @@
 #define MODEM_RADIO_HAL_MAJOR_VERSION 0
 #define MODEM_RADIO_HAL_MINOR_VERSION 1
 
-void at_event_handler (const char *s, const char *sms_pdu) {
-	/* todo event handler from URC at commands */
-	hal_info(HAL_DBG_MODEM, "event: %s %s\n", s, sms_pdu);
+/* Modem Technology bits */
+#define MDM_GSM         0x01
+#define MDM_WCDMA       0x02
+#define MDM_CDMA        0x04
+#define MDM_EVDO        0x08
+#define MDM_LTE         0x10
+
+static int str_starts(const char *str, const char *start) {
+	return strncmp(str, start, strlen(start)) == 0;
+}
+
+static int parse_technology_response(const char *response, int *current, int32_t *preferred) {
+	int err;
+	char *line, *p;
+	int ct;
+	int32_t pt = 0;
+	line = p = strdup(response);
+
+	RLOGD("Response: %s", line);
+	err = at_tok_start(&p);
+	if (err || !at_tok_hasmore(&p)) {
+		RLOGD("err: %d. p: %s", err, p);
+		free(line);
+		return -1;
+	}
+	err = at_tok_nextint(&p, &ct);
+	if (err) {
+		free(line);
+		return -1;
+	}
+	if (current) *current = ct;
+	RLOGD("line remaining after int: %s", p);
+	err = at_tok_nexthexint(&p, &pt);
+	if (err) {
+		free(line);
+		return 1;
+	}
+	if (preferred) {
+		*preferred = pt;
+	}
+	free(line);
+	return 0;
+}
+
+static void at_event_handler(const char *s, const char *sms_pdu) {
+	char *line = nullptr, *p;
+	int err;
+	struct radio_hal_msg_buffer modem_msg_buffer = {0, (radio_type)(0), 0, {0}};
+	int msg_id;
+	__attribute__((unused)) key_t key;
+
+	hal_info(HAL_DBG_MODEM, "at_event_handler: %s %s\n", s, sms_pdu);
+
+	key = radio_hal_msg_queue_init(RADIO_MODEM, &msg_id, 2022);
+
+	/* init event message */
+	modem_msg_buffer.msg_sender = RADIO_MODEM;
+	modem_msg_buffer.mtype = RADIO_MODEM; // receiver likes RADIO_MODEM messages
+
+	if (str_starts(s, "%CTZV:")) {
+		char *response;
+		line = p = strdup(s);
+		at_tok_start(&p);
+		err = at_tok_nextstr(&p, &response);
+		if (err != 0) {
+			hal_err(HAL_DBG_MODEM, "invalid NITZ line %s\n", s);
+		} else {
+			if (sizeof(modem_msg_buffer.msg_text) > strlen(response)-1)
+				strncpy(modem_msg_buffer.msg_text, response, sizeof(modem_msg_buffer.msg_text));
+			modem_msg_buffer.msg_event = nitz_event;
+		}
+		free(line);
+	} else if (str_starts(s,"+CREG:") || str_starts(s, "+CGREG:")) {
+		if (sizeof(modem_msg_buffer.msg_text) > strlen(s)-1)
+			strncpy(modem_msg_buffer.msg_text, s, sizeof(modem_msg_buffer.msg_text));
+		modem_msg_buffer.msg_event = registration_event;
+		printf("registration_event\n");
+	} else if (str_starts(s, "+CGEV:")) {
+		/* Really, we can ignore NW CLASS and ME CLASS events here,
+		 * but right now we don't since extranous
+		 * RIL_UNSOL_DATA_CALL_LIST_CHANGED calls are tolerated
+		 */
+		/* can't issue AT commands here -- call on main thread */
+		if (sizeof(modem_msg_buffer.msg_text) > strlen(s)-1)
+			strncpy(modem_msg_buffer.msg_text, s, sizeof(modem_msg_buffer.msg_text));
+		modem_msg_buffer.msg_event = data_call_event;
+	} else if (str_starts(s, "+CTEC: ")) {
+		int tech, mask;
+		switch (parse_technology_response(s, &tech, NULL)) {
+			case -1: // no argument could be parsed.
+				RLOGE("invalid CTEC line %s\n", s);
+				break;
+			case 1: // current mode correctly parsed
+			case 0: // preferred mode correctly parsed
+				mask = 1 << tech;
+				if (mask != MDM_GSM && mask != MDM_CDMA &&
+					mask != MDM_WCDMA && mask != MDM_LTE) {
+					RLOGE("Unknown technology %d\n", tech);
+				} else {
+					if (sizeof(modem_msg_buffer.msg_text) > strlen(s)-1)
+						strncpy(modem_msg_buffer.msg_text, s, sizeof(modem_msg_buffer.msg_text));
+					modem_msg_buffer.msg_event = cellular_tech_event;
+				}
+				break;
+		}
+	} else if (str_starts(s, "+CFUN: 0")) {
+		if (sizeof(modem_msg_buffer.msg_text) > strlen(s)-1)
+			strncpy(modem_msg_buffer.msg_text, s, sizeof (modem_msg_buffer.msg_text));
+		modem_msg_buffer.msg_event = modem_off_event;
+	} else if (str_starts(s, "+QIND: PB DONE")) {
+		if (sizeof(modem_msg_buffer.msg_text) > strlen(s)-1)
+			strncpy(modem_msg_buffer.msg_text, s, sizeof(modem_msg_buffer.msg_text));
+		modem_msg_buffer.msg_event = registration_event;
+		printf("registration_event2\n");
+	}
+
+	int ret = radio_hal_msg_send(&modem_msg_buffer, msg_id, RADIO_MODEM, false);
+	printf("ret = %d\n", ret);
 }
 
 static int prepare_cmd_buf(char *buf, size_t len, const char *fmt, ...) {
@@ -138,11 +258,10 @@ static int modem_hal_check_modem() {
 	char *manufacturer;
 	char *model;
 	ATResponse *at_response = nullptr;
- 	const int mm_lenght = 10;
-	manufacturer=(char*)malloc(mm_lenght);
-	model=(char*)malloc(mm_lenght);
+	const int mm_lenght = 10;
+	manufacturer = (char *) malloc(mm_lenght);
+	model = (char *) malloc(mm_lenght);
 
-	/* todo model/manufacturer check AT+GMI / AT+GMM and continue if match*/
 	err = at_send_command_singleline("AT+GMI", "", &at_response);
 	if (err != 0)
 		goto error;
@@ -224,12 +343,12 @@ static void modem_hal_serial_detach(struct modem_softc *sc) {
 	at_close();
 }
 
-static int modem_hal_open(struct radio_context *ctx, enum radio_type type, struct modem_config *config) {
+static int modem_hal_open(struct radio_context *ctx, enum radio_type type) {
 	int err = 0;
 	struct modem_softc *sc = (struct modem_softc *) ctx->radio_private;
+	struct modem_config *config = (struct modem_config *) (ctx->config);
 
 	hal_info(HAL_DBG_MODEM, "modem HAL open %s\n", config->at_serial);
-
 	sc->atif = open(config->at_serial, O_RDWR | O_NOCTTY | O_SYNC);
 	if (!sc->atif) {
 		hal_err(HAL_DBG_MODEM, "Failed to open %s!\n", config->at_serial);
@@ -536,13 +655,15 @@ error:
 	return -1;
 }
 
-int modem_hal_connect(struct radio_context *ctx, char *apn, char *pin) {
+int modem_hal_connect(struct radio_context *ctx) {
 	struct modem_softc *sc = (struct modem_softc *) ctx->radio_private;
+	struct modem_config *config = (struct modem_config *) ctx->config;
 	int ret = 0;
 	char cmd_buf[CMD_BUFFER_SIZE] = {0};
 	char resp_buf[RESP_BUFFER_SIZE] = {0};
 	size_t len = sizeof(resp_buf) - 1;
 	int pin1_retries = 0;
+	ATResponse *p_response = nullptr;
 
 	ret = modem_hal_check_pin_status(ctx);
 
@@ -562,7 +683,7 @@ int modem_hal_connect(struct radio_context *ctx, char *apn, char *pin) {
 			hal_info(HAL_DBG_MODEM, "SIM PIN retries = %d\n", pin1_retries);
 			// don't use the last retry (if you don't have PUK code)
 			if (pin1_retries > 1) {
-				ret = enter_sim_pin(pin);
+				ret = enter_sim_pin(config->pin);
 				if (ret) {
 					hal_err(HAL_DBG_MODEM, "SIM PIN verify failed\n");
 					return -1;
@@ -580,8 +701,38 @@ int modem_hal_connect(struct radio_context *ctx, char *apn, char *pin) {
 			return -1;
 	}
 
+	/*  No auto-answer */
+	at_send_command("ATS0=0", NULL);
+	/*  Extended errors */
+	at_send_command("AT+CMEE=1", NULL);
 	/*  Network registration events */
+	ret = at_send_command("AT+CREG=2", &p_response);
+	/* some handsets -- in tethered mode -- don't support CREG=2 */
+	if (ret < 0 || p_response->success == 0) {
+		at_send_command("AT+CREG=1", NULL);
+	}
+	at_response_free(p_response);
+	/*  GPRS registration events */
 	at_send_command("AT+CGREG=1", NULL);
+	/*  Call Waiting notifications */
+	at_send_command("AT+CCWA=1", NULL);
+	/*  Alternating voice/data off */
+	at_send_command("AT+CMOD=0", NULL);
+	/*  muted */
+	at_send_command("AT+CMUT=1", NULL);
+	/*  +CSSU unsolicited supp service notifications */
+	at_send_command("AT+CSSN=0,1", NULL);
+	/*  no connected line identification */
+	at_send_command("AT+COLP=0", NULL);
+	/*  HEX character set */
+	at_send_command("AT+CSCS=\"HEX\"", NULL);
+	/*  USSD unsolicited */
+	at_send_command("AT+CUSD=1", NULL);
+	/*  Enable +CGEV GPRS event notifications, but don't buffer */
+	at_send_command("AT+CGEREP=1,0", NULL);
+	/*  SMS PDU mode */
+	at_send_command("AT+CMGF=0", NULL);
+
 	/* Turn modem online*/
 	at_send_command("AT+CFUN=1", NULL);
 
@@ -595,7 +746,7 @@ int modem_hal_connect(struct radio_context *ctx, char *apn, char *pin) {
 	/* todo replace with libqmi API */
 	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf),
 					(const char *) "qmicli --device=/dev/%s --device-open-proxy --wds-start-network=\"ip-type=4,apn=%s\" --client-no-release-cid",
-					sc->modem, apn);
+					sc->modem, config->apn);
 	ret = modem_hal_run_sys_cmd(cmd_buf, resp_buf, (int) len);
 
 	if (ret) {
@@ -706,14 +857,75 @@ error:
 	return -1;
 }
 
+static modem_SystemState init_handler(struct radio_context *ctx) {
+	struct radio_generic_func *radio_ops;
+
+	radio_ops = ctx->cmn.rd_func;
+
+	hal_info(HAL_DBG_MODEM, "init_handler\n");
+	if (radio_ops->radio_connect(ctx)) {
+		sleep(1); // due modem booting up todo
+		return init_state;
+	}
+
+	return initialised_state;
+}
+
+//wifi state machine definition
+static modem_StateMachine modem_sStateMachine[] =
+		{       // from                  // event trigger        // event handler
+				{init_state, startup_event, init_handler},
+				{initialised_state, startup_event, init_handler},
+		};
+
+static void modem_events(struct radio_context *ctx) {
+	bool loop = true;
+	modem_SystemEvent NewEvent;
+	modem_SystemState NextState = init_state;
+	struct radio_hal_msg_buffer modem_msg_buffer = {0, (radio_type)(0), 0, {0}};
+	int msg_id = 0;
+
+	__attribute__((unused)) key_t key = radio_hal_msg_queue_init(RADIO_MODEM, &msg_id, 2022);
+
+	while (loop) {
+		hal_info(HAL_DBG_MODEM, "EventState: %d\n", NextState);
+
+		if (NextState != init_state) {
+			printf("-----------------------------\n");
+			radio_hal_msg_recv(&modem_msg_buffer, msg_id, RADIO_MODEM);
+			NewEvent = (modem_SystemEvent) modem_msg_buffer.msg_event;
+			printf("++++++++++++++++++++++++++++++\n");
+		} else {
+			NewEvent = startup_event;
+		}
+
+		if (NewEvent == no_event) {
+			hal_info(HAL_DBG_MODEM, "eNewEvent: %d\n", NewEvent);
+			continue;
+		}
+
+		if ((NextState < last_State) && (NewEvent < last_Event) &&
+			(modem_sStateMachine[NextState].StateMachineEvent == NewEvent) &&
+			(modem_sStateMachine[NextState].fpStateMachineEventHandler != nullptr)) {
+			// function call as per the state and event and return the next state of the finite state machine
+			NextState = (*modem_sStateMachine[NextState].fpStateMachineEventHandler)(ctx);
+		} else {
+			hal_warn(HAL_DBG_MODEM, "Wifi state machine unknown event!!  %d\n", NewEvent);
+		}
+	}
+
+	radio_hal_msg_queue_destroy(RADIO_MODEM, msg_id);
+	msg_id = 0;
+}
+
 static struct radio_generic_func modem_hal_ops = {
-		.open = nullptr,
+		.open = modem_hal_open,
 		.close = modem_hal_close,
 		.radio_get_hal_version = modem_hal_get_hal_version,
 		.radio_initialize = nullptr,
 		.radio_wait_for_driver_ready = nullptr,
 		.radio_cleanup = nullptr,
-		.radio_event_loop = nullptr,
+		.radio_event_loop = modem_events,
 		.radio_create_config = nullptr,
 		.radio_enable = nullptr,
 		.get_no_of_radio = nullptr,
@@ -732,7 +944,6 @@ static struct radio_generic_func modem_hal_ops = {
 		.radio_create_ap = nullptr,
 		.radio_join_mesh = nullptr,
 		.radio_connect = modem_hal_connect,
-		.modem_open = modem_hal_open,
 };
 
 __attribute__((unused)) int modem_hal_register_ops(struct radio_context *ctx) {
@@ -753,20 +964,23 @@ struct radio_context *modem_hal_attach() {
 	sc = (struct modem_softc *) malloc(sizeof(struct modem_softc));
 	if (!sc) {
 		hal_err(HAL_DBG_MODEM, "failed to allocate modem softc ctx\n");
-		free(ctx);
-		return nullptr;
+		goto sc_alloc_failure;
 	}
 
 	ctx->radio_private = (void *) sc;
 	ctx->cmn.rd_func = &modem_hal_ops;
 	hal_info(HAL_DBG_MODEM, "Modem HAL attach completed\n");
-
 	return ctx;
+
+sc_alloc_failure:
+	free(ctx);
+	return nullptr;
 }
 
 int modem_hal_detach(struct radio_context *ctx) {
 	struct modem_softc *sc = (struct modem_softc *) ctx->radio_private;
 
+	free(ctx->config);
 	free(sc);
 	free(ctx);
 
