@@ -7,13 +7,11 @@
 
 int wifi_debugfs_init(struct wifi_softc *sc)
 {
-	const char *path = "/sys/kernel/debug/ieee80211/";
-	const char *suffix  = "ath10k";
 	struct stat st;
 
 	/*To Do:  Check if debugfs is mounted */
-	snprintf(sc->nl_ctx.debugfs_root, RADIO_DEBUGFS_DIRSIZE, "%s%s%s", path, sc->nl_ctx.phyname, suffix);
-	if (stat(sc->nl_ctx.debugfs_root, &st) == 0)
+	snprintf(sc->nl_ctx.debugfs_root, 100, "%s%s%s%s", "/sys/kernel/debug/ieee80211/", "phy", sc->nl_ctx.phyname, "/ath10k/");
+	if (stat(sc->nl_ctx.debugfs_root, &st))
 		goto exit;
 
 	return 0;
@@ -91,5 +89,10 @@ int wifi_debugfs_search(struct wifi_softc *sc, const char *filename, const char 
 	fclose(file);
 
 	return matched;
+}
+
+int wifi_get_fw_stats(struct wifi_softc *sc, char *buf, int buf_size)
+{
+	return wifi_debugfs_read(sc, "fw_stats", buf, buf_size);
 }
 
