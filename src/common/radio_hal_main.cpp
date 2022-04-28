@@ -51,13 +51,13 @@ static int test_radio_hal_api(struct radio_context *ctx, char *argv[],
 				radio_ops->close(ctx, RADIO_WIFI);
 			} else if(!strcmp(cmd, "radio_hal_get_scan_result")) {
 				radio_ops->open(ctx, RADIO_WIFI);
-				radio_ops->radio_get_scan_results(ctx, scan_results);
-				hal_info(HAL_DBG_WIFI, "%s\n", scan_results);
+				radio_ops->radio_get_scan_results(ctx, buf);
+				hal_info(HAL_DBG_WIFI, "%s\n", buf);
 				radio_ops->close(ctx, RADIO_WIFI);
 			} else if(!strcmp(cmd, "radio_hal_connect_ap")) {
 				radio_ops->open(ctx, RADIO_WIFI);
-				radio_ops->radio_get_scan_results(ctx, scan_results);
-				hal_info(HAL_DBG_WIFI, "%s\n", scan_results);
+				radio_ops->radio_get_scan_results(ctx, buf);
+				hal_info(HAL_DBG_WIFI, "%s\n", buf);
 				radio_ops->radio_get_scan_results(ctx, buf);
 				hal_info(HAL_DBG_WIFI, "%s\n", buf);
 				radio_ops->close(ctx, RADIO_WIFI);

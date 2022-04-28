@@ -1307,7 +1307,7 @@ static struct radio_generic_func wifi_hal_ops = {
 	.radio_create_ap = wifi_hal_create_ap,
 	.radio_join_mesh = wifi_hal_join_mesh,
 	.radio_connect = nullptr, //modem interface
-	.modem_open = nullptr    //modem interface
+	.modem_open = nullptr,    //modem interface
 	.radio_get_fw_stats = wifi_hal_get_fw_stats,
 };
 
