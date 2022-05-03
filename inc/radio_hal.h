@@ -92,8 +92,7 @@ typedef struct radio_generic_func {
 	int (*radio_connect)(struct radio_context *ctx);
 } radio_gen_func_t;
 
-struct radio_common
-{
+struct radio_common {
 	char radio_name[RADIO_IFNAME_SIZE];
 	enum radio_type type;
 	char hal_version[RADIO_HAL_VERSION_SIZE];
@@ -101,8 +100,7 @@ struct radio_common
 	struct radio_generic_func *rd_func;
 };
 
-struct radio_context
-{
+struct radio_context {
 	struct radio_common cmn;
 	void *radio_private;
 	void *config;
@@ -111,15 +109,15 @@ struct radio_context
 // structure for message queue and messaging
 struct radio_hal_msg_buffer {
 	long mtype;  // as receiver 0x80000000 or'ed with radio_type
-	enum radio_type msg_sender;
-	int msg_event;
-	char msg_text[50];
+	enum radio_type sender;
+	int event;
+	char mtext[100];
 };
 
-key_t radio_hal_msg_queue_init(enum radio_type radio, int *msg_id, int proj_id);
+int radio_hal_msg_queue_init(enum radio_type radio);
 int radio_hal_msg_queue_destroy(enum radio_type radio, int msg_id);
 int radio_hal_msg_recv(struct radio_hal_msg_buffer *msg, int msg_id, enum radio_type radio);
-int radio_hal_msg_send(struct radio_hal_msg_buffer *msg, int msg_id, enum radio_type radio, bool high_prio);
+int radio_hal_msg_send(struct radio_hal_msg_buffer *msg, int msg_id, enum radio_type radio);
 
 struct radio_context* radio_hal_attach(enum radio_type type);
 int radio_hal_dettach(struct radio_context *ctx, enum radio_type type);

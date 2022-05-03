@@ -1,5 +1,6 @@
 #include <cstring>
 #include <yaml.h>
+#include <errno.h>
 #include "radio_hal.h"
 #include "radio_hal_yaml.h"
 #include "debug.h"
@@ -21,6 +22,9 @@ static int radio_hal_yaml_z_config(struct z_config* conf_struct, char *key, char
 
 static int radio_hal_yaml_wifi_config(struct wifi_config* conf_struct, char *key, char *value)
 {
+
+	char *stopped;
+
 	/* TODO concurrency with single radio? */
 	if (debug)
 		hal_debug(HAL_DBG_WIFI, "radio_hal_wifi_config: key: %s value: %s\n", key, value);
@@ -36,7 +40,11 @@ static int radio_hal_yaml_wifi_config(struct wifi_config* conf_struct, char *key
 	} else if(!strcmp(key, "frequency")) {
 		strcpy(conf_struct->freq, value);
 	} else if(!strcmp(key, "api_version")) {
-		//strcpy(conf_struct->api_version, value);
+		errno = 0;
+		conf_struct->api_version = (int)strtol(value, &stopped, 10);
+		if (errno) {
+			hal_err(HAL_DBG_WIFI, "key: %s value: %s not valid\n", key, value);
+		}
 	} else if(!strcmp(key, "passphrase")) {
 		strcpy(conf_struct->passphrase, value);
 	} else if(!strcmp(key, "enc")) {
@@ -50,9 +58,17 @@ static int radio_hal_yaml_wifi_config(struct wifi_config* conf_struct, char *key
 	} else if(!strcmp(key, "preamble")) {
 		strcpy(conf_struct->preamble, value);
 	} else if(!strcmp(key, "distance")) {
-		//strcpy(conf_struct->distance, value);
+		errno = 0;
+		conf_struct->distance= (int)strtol(value, &stopped, 10);
+		if (errno) {
+			hal_err(HAL_DBG_WIFI, "key: %s value: %s not valid\n", key, value);
+		}
 	} else if(!strcmp(key, "tx_power")) {
-		//strcpy(conf_struct->tx_power, value);
+		errno = 0;
+		conf_struct->tx_power = (int)strtol(value, &stopped, 10);
+		if (errno) {
+			hal_err(HAL_DBG_WIFI, "key: %s value: %s not valid\n", key, value);
+		}
 	} else if(!strcmp(key, "mode")) {
 		strcpy(conf_struct->mode, value);
 	} else if(!strcmp(key, "type")) {

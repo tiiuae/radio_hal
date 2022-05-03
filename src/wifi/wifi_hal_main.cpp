@@ -1321,9 +1321,6 @@ static wifi_eSystemState init_handler(struct radio_context *ctx) {
 	return initialised_state;
 }
 
-
-
-
 //wifi state machine definition
 static wifi_StateMachine wifi_asStateMachine[] =
 {       // from                  // event trigger        // event handler
@@ -1359,11 +1356,23 @@ static void wifi_events(struct radio_context *ctx)
             continue;
         }
 
-        if ((eNextState < last_State) && (eNewEvent < last_Event) && (wifi_asStateMachine[eNextState].eStateMachineEvent == eNewEvent) && (wifi_asStateMachine[eNextState].fpStateMachineEventHandler != NULL)) {
-            // function call as per the state and event and return the next state of the finite state machine
-            eNextState = (*wifi_asStateMachine[eNextState].fpStateMachineEventHandler)(ctx);
-        } else {
-            hal_warn(HAL_DBG_WIFI, "Wifi state machine unknown event!!  %d\n", eNewEvent);
+        if ((eNextState < last_State) && (eNewEvent < last_Event)) {
+			int i = 0;
+			// search from StateMachine
+			while (wifi_asStateMachine[i].fpStateMachineEventHandler != nullptr) {
+				if ((wifi_asStateMachine[i].eStateMachineEvent == eNewEvent) &&   // is supported event in StateMachine
+					(wifi_asStateMachine[i].eStateMachine == eNextState)) {       // state transition is defined
+					break;
+				}
+				i++;
+			}
+			if (wifi_asStateMachine[i].fpStateMachineEventHandler != nullptr)
+				eNextState = (*wifi_asStateMachine[i].fpStateMachineEventHandler)(ctx);
+			else
+				hal_warn(HAL_DBG_MODEM, "Not defined state state!!  event=%d\n", eNewEvent);
+
+		} else {
+            hal_warn(HAL_DBG_WIFI, "Wifi state machine unknown event!!  event=%d\n", eNewEvent);
 		}
     }
 }
