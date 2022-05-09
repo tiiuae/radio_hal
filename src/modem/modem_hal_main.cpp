@@ -733,6 +733,7 @@ static struct radio_generic_func modem_hal_ops = {
 		.radio_join_mesh = nullptr,
 		.radio_connect = modem_hal_connect,
 		.modem_open = modem_hal_open,
+		.radio_get_fw_stats = nullptr,
 };
 
 __attribute__((unused)) int modem_hal_register_ops(struct radio_context *ctx) {

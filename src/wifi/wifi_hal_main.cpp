@@ -782,6 +782,8 @@ static int wifi_hal_open(struct radio_context *ctx, enum radio_type type)
 		return err;
 	}
 
+	wifi_debugfs_init(sc);
+
 	return 0;
 }
 
@@ -1178,6 +1180,17 @@ static int wifi_hal_join_mesh(struct radio_context *ctx, char *ssid, char *psk, 
 	return 0;
 }
 
+int wifi_hal_get_fw_stats(struct radio_context *ctx, char *buf, int buf_size, int index)
+{
+	int ret;
+	struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
+	ret = wifi_get_fw_stats(sc, buf, buf_size);
+	if (ret)
+		return -1;
+
+	return 0;
+}
+
 __attribute__((unused))static int wifi_hal_ctrl_recv(struct wpa_ctrl_ctx *ctx, int index, char *reply, size_t *reply_len)
 {
 	int res;
@@ -1294,7 +1307,8 @@ static struct radio_generic_func wifi_hal_ops = {
 	.radio_create_ap = wifi_hal_create_ap,
 	.radio_join_mesh = wifi_hal_join_mesh,
 	.radio_connect = nullptr, //modem interface
-	.modem_open = nullptr    //modem interface
+	.modem_open = nullptr,    //modem interface
+	.radio_get_fw_stats = wifi_hal_get_fw_stats,
 };
 
 __attribute__((unused)) int wifi_hal_register_ops(struct radio_context *ctx)

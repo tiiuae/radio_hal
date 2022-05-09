@@ -14,7 +14,7 @@ static int test_radio_hal_api(struct radio_context *ctx, char *argv[],
 	char version[32] = {0};
 	char ifname[RADIO_IFNAME_SIZE] = {0};
 	char mac_addr[RADIO_MACADDR_SIZE] = {0};
-	char scan_results[4096] = {0};
+	char buf[4096] = {0};
 	struct radio_generic_func *radio_ops = ctx->cmn.rd_func;
 	char *cmd = argv[2];
 	struct modem_config *m_config;
@@ -51,13 +51,18 @@ static int test_radio_hal_api(struct radio_context *ctx, char *argv[],
 				radio_ops->close(ctx, RADIO_WIFI);
 			} else if(!strcmp(cmd, "radio_hal_get_scan_result")) {
 				radio_ops->open(ctx, RADIO_WIFI);
-				radio_ops->radio_get_scan_results(ctx, scan_results);
-				hal_info(HAL_DBG_WIFI, "%s\n", scan_results);
+				radio_ops->radio_get_scan_results(ctx, buf);
+				hal_info(HAL_DBG_WIFI, "%s\n", buf);
 				radio_ops->close(ctx, RADIO_WIFI);
 			} else if(!strcmp(cmd, "radio_hal_connect_ap")) {
 				radio_ops->open(ctx, RADIO_WIFI);
-				radio_ops->radio_get_scan_results(ctx, scan_results);
-				hal_info(HAL_DBG_WIFI, "%s\n", scan_results);
+				radio_ops->radio_get_scan_results(ctx, buf);
+				hal_info(HAL_DBG_WIFI, "%s\n", buf);
+				radio_ops->close(ctx, RADIO_WIFI);
+			} else if(!strcmp(cmd, "radio_hal_connect_ap")) {
+				radio_ops->open(ctx, RADIO_WIFI);
+				radio_ops->radio_get_scan_results(ctx, buf);
+				hal_info(HAL_DBG_WIFI,"%s\n", buf);
 				radio_ops->radio_connect_ap(ctx, argv[3], argv[4]);
 				radio_ops->close(ctx, RADIO_WIFI);
 			} else if(!strcmp(cmd, "radio_hal_create_ap")) {
@@ -69,6 +74,12 @@ static int test_radio_hal_api(struct radio_context *ctx, char *argv[],
 				radio_ops->radio_get_iface_name(ctx, ifname, 1);
 				radio_ops->radio_join_mesh(ctx, argv[3], argv[4], argv[5]);
 				radio_ops->close(ctx, RADIO_WIFI);
+			} else if(!strcmp(cmd, "radio_get_fw_stats")) {
+				radio_ops->open(ctx, RADIO_WIFI);
+				radio_ops->radio_get_iface_name(ctx, ifname, 1);
+				radio_ops->radio_get_fw_stats(ctx, buf, 4096, 1);
+				radio_ops->close(ctx, RADIO_WIFI);
+				hal_info(HAL_DBG_WIFI, "%s\n", buf);
 			}
 			break;
 		case RADIO_BT:
