@@ -20,14 +20,6 @@ int radio_hal_msg_queue_destroy(enum radio_type radio, int msg_id) {
 int radio_hal_msg_recv(struct radio_hal_msg_buffer *msg, int msg_id, enum radio_type radio) {
 	long msgtyp = 0x80000000 | radio;
 	int msgflg = 0;
-	/* *
-	 If msgtyp is 0, then the first message in the queue is read.
-	 If msgtyp is greater than 0, then the first message in the queue of type
-	 msgtyp is read, unless MSG_EXCEPT was specified in msgflg, in which case the
-	 first message in the queue of type not equal to msgtyp will be read.
-	 If msgtyp is less than 0, then the first message in the queue with the lowest
-	 type less than or equal to the absolute value of msgtyp will be read.
-	 * */
 
 	if (msgrcv(msg_id, msg, sizeof(struct radio_hal_msg_buffer), msgtyp, msgflg) == -1) {
 		if (errno != ENOMSG) {

@@ -2,12 +2,38 @@
 #define __WIFI_HAL_H__
 
 enum wifi_state {
+	UNKNOWN_STATE = -1,
+	INIT_STATE,
 	IF_DOWN_STATE,
 	IF_UP_STATE,
 	ASSOCIATED_STATE,
 	CONNECTED_STATE,
 	DISCONNECTED_STATE,
+	LAST_STATE  /* Don't remove */
 };
+
+//Events
+enum wifi_SystemEvent {
+	NO_EVENT = -1,
+	STARTUP_EVENT,
+	AP_ENABLED_EVENT,
+	MESH_GROUP_STARTED_EVENT,
+	DISCONNECTED_EVENT,
+	CONNECTED_EVENT,
+	TERMINATE_EVENT,
+	LAST_EVENT
+};
+
+//typedef of function pointer
+typedef wifi_state (*wifiEventHandler)(struct radio_context *ctx);
+
+//structure of state and event with event handler
+typedef struct {
+	wifi_state StateMachine;
+	wifi_SystemEvent StateMachineEvent;
+	wifiEventHandler StateMachineEventHandler;
+} wifi_StateMachine;
+
 
 struct netlink_ctx {
 	struct nl_sock *sock;

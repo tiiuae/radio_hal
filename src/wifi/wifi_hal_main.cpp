@@ -23,7 +23,6 @@
 #include "radio_hal.h"
 #include "radio_hal_yaml.h"
 #include "wifi_hal.h"
-#include "wifi_events.h"
 
 #include "wifi_frame_helper.h"
 #include "wpa_socket/wpa_ctrl.h"
@@ -1208,18 +1207,18 @@ static int str_starts(const char *str, const char *start)
     return strncmp(str, start, strlen(start)) == 0;
 }
 
-static wifi_eSystemEvent wifi_hal_map_wpa_event_to_state(char *event, int len) {
+static wifi_SystemEvent wifi_hal_map_wpa_event_to_state(char *event, int len) {
 
     if (str_starts(event, WPA_EVENT_DISCONNECTED)) {
-        return disconnected_event;
+        return DISCONNECTED_EVENT;
     } else if (str_starts(event, AP_EVENT_ENABLED)) {
-        return ap_enabled_event;
+        return AP_ENABLED_EVENT;
     } else if (str_starts(event, MESH_GROUP_STARTED)) {
-        return mesh_group_started_event;
+        return MESH_GROUP_STARTED_EVENT;
     } else if (str_starts(event, MESH_PEER_CONNECTED)) {
-        return connected_event;
+        return CONNECTED_EVENT;
     } else if (str_starts(event, MESH_PEER_DISCONNECTED)) {
-        return disconnected_event;
+        return DISCONNECTED_EVENT;
 //    } else if (str_starts(event, WPA_EVENT_CHANNEL_SWITCH_STARTED)) {
 //        return error_event;
 //    } else if (str_starts(event, AP_EVENT_DISABLED)) {
@@ -1273,33 +1272,34 @@ static wifi_eSystemEvent wifi_hal_map_wpa_event_to_state(char *event, int len) {
 //    } else if (str_starts(event, DPP_EVENT_NET_ACCESS_KEY)) {
 //        return error_event;
     } else if (str_starts(event, WPA_EVENT_TERMINATING)) {
-        return terminate_event;
+        return TERMINATE_EVENT;
     }
-    return no_event;
+    return NO_EVENT;
 }
 
-//function call to dispatch the amount and return the ideal state
-static wifi_eSystemState ap_enabled_handler(struct radio_context *ctx) {
-    return ap_enabled_state;
-}
-
-static wifi_eSystemState mesh_group_started_handler(struct radio_context *ctx) {
-    return mesh_group_started_state;
-}
-
-static wifi_eSystemState mesh_connected_handler(struct radio_context *ctx) {
+static wifi_state connected_handler(struct radio_context *ctx) {
     struct radio_generic_func *radio_ops;
     radio_ops = ctx->cmn.rd_func;
 
     hal_info(HAL_DBG_WIFI, "RSSI:%d dbm\n", (int8_t)radio_ops->radio_get_rssi(ctx, 1));
-    return connected_state;
+    return CONNECTED_STATE;
 }
 
-static wifi_eSystemState mesh_disconnected_handler(struct radio_context *ctx) {
-    return disconnected_state;
+static wifi_state disconnected_handler(struct radio_context *ctx) {
+	struct radio_generic_func *radio_ops;
+	char scan_results[4096] = {0};
+
+	radio_ops = ctx->cmn.rd_func;
+
+	/* for test purposes */
+	hal_info(HAL_DBG_WIFI, "RSSI:%d dbm\n", (int8_t)radio_ops->radio_get_rssi(ctx, 1));
+	radio_ops->radio_get_scan_results(ctx, scan_results);
+	hal_info(HAL_DBG_WIFI, "SCAN RESULTS %s\n", scan_results);
+
+    return DISCONNECTED_STATE;
 }
 
-static wifi_eSystemState init_handler(struct radio_context *ctx) {
+static wifi_state init_handler(struct radio_context *ctx) {
 	struct radio_generic_func *radio_ops;
 	char ifname[RADIO_IFNAME_SIZE] = {0};
 
@@ -1315,21 +1315,19 @@ static wifi_eSystemState init_handler(struct radio_context *ctx) {
 	} else if (strncmp(config->mode, "mesh", 4) == 0) {
 		radio_ops->radio_join_mesh(ctx);
 	} else {
-		return no_state;
+		return UNKNOWN_STATE;
 	}
 
-	return initialised_state;
+	return IF_UP_STATE;
 }
 
 //wifi state machine definition
 static wifi_StateMachine wifi_asStateMachine[] =
 {       // from                  // event trigger        // event handler
-	{init_state, startup_event, init_handler},
-    {initialised_state, ap_enabled_event, ap_enabled_handler},
-    {ap_enabled_state, mesh_group_started_event, mesh_group_started_handler},
-    {mesh_group_started_state,connected_event, mesh_connected_handler},
-    {disconnected_state, connected_event, mesh_disconnected_handler},
-    {connected_state, disconnected_event, mesh_connected_handler},
+	{INIT_STATE,         STARTUP_EVENT,      init_handler},
+    {DISCONNECTED_STATE, CONNECTED_EVENT,    disconnected_handler},
+    {CONNECTED_STATE,    DISCONNECTED_EVENT, connected_handler},
+	{UNKNOWN_STATE,          NO_EVENT,           nullptr} // Don't remove this line
 };
 
 static void wifi_events(struct radio_context *ctx)
@@ -1339,38 +1337,38 @@ static void wifi_events(struct radio_context *ctx)
 	size_t len = sizeof(resp_buf) - 1;
 	size_t nread = 0;
 	bool loop = true;
-	wifi_eSystemEvent eNewEvent = no_event;
-	wifi_eSystemState eNextState = init_state;
+	wifi_SystemEvent eNewEvent = NO_EVENT;
+
+	sc->state = INIT_STATE;
 
 	while (loop) {
-		hal_info(HAL_DBG_WIFI, "EventState: %d\n", eNextState);
-		if (eNextState != init_state) {
+		hal_info(HAL_DBG_WIFI, "EventState: %d\n", sc->state);
+		if (sc->state != INIT_STATE) {
 			// read next events
 			nread = wifi_hal_wait_on_event(&sc->wpa_ctx, 0, resp_buf, len);
 			eNewEvent = wifi_hal_map_wpa_event_to_state(resp_buf, nread);
 		} else {
-			eNewEvent = startup_event;
+			eNewEvent = STARTUP_EVENT;
 		}
 
-        if (eNewEvent == no_event) {
+        if (eNewEvent == NO_EVENT) {
             continue;
         }
 
-        if ((eNextState < last_State) && (eNewEvent < last_Event)) {
+        if ((sc->state < LAST_STATE) && (eNewEvent < LAST_EVENT)) {
 			int i = 0;
 			// search from StateMachine
-			while (wifi_asStateMachine[i].fpStateMachineEventHandler != nullptr) {
-				if ((wifi_asStateMachine[i].eStateMachineEvent == eNewEvent) &&   // is supported event in StateMachine
-					(wifi_asStateMachine[i].eStateMachine == eNextState)) {       // state transition is defined
+			while (wifi_asStateMachine[i].StateMachineEventHandler != nullptr) {
+				if ((wifi_asStateMachine[i].StateMachineEvent == eNewEvent) &&   // is supported event in StateMachine
+					(wifi_asStateMachine[i].StateMachine == sc->state)) {       // state transition is defined
 					break;
 				}
 				i++;
 			}
-			if (wifi_asStateMachine[i].fpStateMachineEventHandler != nullptr)
-				eNextState = (*wifi_asStateMachine[i].fpStateMachineEventHandler)(ctx);
+			if (wifi_asStateMachine[i].StateMachineEventHandler != nullptr)
+				sc->state = (*wifi_asStateMachine[i].StateMachineEventHandler)(ctx);
 			else
-				hal_warn(HAL_DBG_MODEM, "Not defined state state!!  event=%d\n", eNewEvent);
-
+				hal_warn(HAL_DBG_WIFI, "Not defined state state!!  event=%d\n", eNewEvent);
 		} else {
             hal_warn(HAL_DBG_WIFI, "Wifi state machine unknown event!!  event=%d\n", eNewEvent);
 		}
