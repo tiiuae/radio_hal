@@ -111,9 +111,9 @@ struct radio_context
 // structure for message queue and messaging
 struct radio_hal_msg_buffer {
 	long mtype;  // as receiver 0x80000000 or'ed with radio_type
-	enum radio_type msg_sender;
-	int msg_event;
-	char msg_text[50];
+	enum radio_type sender;
+	int event;
+	char mtext[100];
 };
 
 key_t radio_hal_msg_queue_init(enum radio_type radio, int *msg_id, int proj_id);

@@ -1,9 +1,6 @@
 #include <cstring>
-#include <stdarg.h>
+#include <cstdarg>
 #include <fcntl.h>
-#include <sys/ipc.h>
-#include <sys/msg.h>
-//#include <semaphore.h>
 #include <unistd.h>
 #include "radio_hal.h"
 #include "modem_hal.h"
@@ -13,8 +10,6 @@
 #include "at/ril.h"
 #include "debug.h"
 #include "radio_hal_yaml.h"
-#include "modem_events.h"
-
 
 #define CMD_BUFFER_SIZE sizeof(char) * 2048
 #define MAC_ADDRESS_LENGTH sizeof(char) * 18 // aa:bb:cc:dd:ee:ff + NULL terminator
@@ -30,6 +25,8 @@
 #define MDM_CDMA        0x04
 #define MDM_EVDO        0x08
 #define MDM_LTE         0x10
+
+static int modem_fds[2];
 
 static int str_starts(const char *str, const char *start) {
 	return strncmp(str, start, strlen(start)) == 0;
@@ -71,17 +68,13 @@ static int parse_technology_response(const char *response, int *current, int32_t
 static void at_event_handler(const char *s, const char *sms_pdu) {
 	char *line = nullptr, *p;
 	int err;
-	struct radio_hal_msg_buffer modem_msg_buffer = {0, (radio_type)(0), 0, {0}};
-	int msg_id;
-	__attribute__((unused)) key_t key;
+	int retval;
+	struct radio_hal_msg_buffer modem_msg_buffer = {0,radio_type(0),0, {0}};
 
 	hal_info(HAL_DBG_MODEM, "at_event_handler: %s %s\n", s, sms_pdu);
 
-	key = radio_hal_msg_queue_init(RADIO_MODEM, &msg_id, 2022);
-
 	/* init event message */
-	modem_msg_buffer.msg_sender = RADIO_MODEM;
-	modem_msg_buffer.mtype = RADIO_MODEM; // receiver likes RADIO_MODEM messages
+	modem_msg_buffer.sender = RADIO_MODEM;
 
 	if (str_starts(s, "%CTZV:")) {
 		char *response;
@@ -91,25 +84,24 @@ static void at_event_handler(const char *s, const char *sms_pdu) {
 		if (err != 0) {
 			hal_err(HAL_DBG_MODEM, "invalid NITZ line %s\n", s);
 		} else {
-			if (sizeof(modem_msg_buffer.msg_text) > strlen(response)-1)
-				strncpy(modem_msg_buffer.msg_text, response, sizeof(modem_msg_buffer.msg_text));
-			modem_msg_buffer.msg_event = nitz_event;
+			if (sizeof(modem_msg_buffer.mtext) > strlen(response)-1)
+				strncpy(modem_msg_buffer.mtext, response, sizeof(modem_msg_buffer.mtext));
+			modem_msg_buffer.event = MODEM_NITZ_EVENT;
 		}
 		free(line);
 	} else if (str_starts(s,"+CREG:") || str_starts(s, "+CGREG:")) {
-		if (sizeof(modem_msg_buffer.msg_text) > strlen(s)-1)
-			strncpy(modem_msg_buffer.msg_text, s, sizeof(modem_msg_buffer.msg_text));
-		modem_msg_buffer.msg_event = registration_event;
-		printf("registration_event\n");
+		if (sizeof(modem_msg_buffer.mtext) > strlen(s)-1)
+			strncpy(modem_msg_buffer.mtext, s, sizeof(modem_msg_buffer.mtext));
+		modem_msg_buffer.event = MODEM_REGISTRATION_EVENT;
 	} else if (str_starts(s, "+CGEV:")) {
 		/* Really, we can ignore NW CLASS and ME CLASS events here,
 		 * but right now we don't since extranous
 		 * RIL_UNSOL_DATA_CALL_LIST_CHANGED calls are tolerated
 		 */
 		/* can't issue AT commands here -- call on main thread */
-		if (sizeof(modem_msg_buffer.msg_text) > strlen(s)-1)
-			strncpy(modem_msg_buffer.msg_text, s, sizeof(modem_msg_buffer.msg_text));
-		modem_msg_buffer.msg_event = data_call_event;
+		if (sizeof(modem_msg_buffer.mtext) > strlen(s)-1)
+			strncpy(modem_msg_buffer.mtext, s, sizeof(modem_msg_buffer.mtext));
+		modem_msg_buffer.event = MODEM_DATA_CALL_EVENT;
 	} else if (str_starts(s, "+CTEC: ")) {
 		int tech, mask;
 		switch (parse_technology_response(s, &tech, NULL)) {
@@ -123,25 +115,33 @@ static void at_event_handler(const char *s, const char *sms_pdu) {
 					mask != MDM_WCDMA && mask != MDM_LTE) {
 					RLOGE("Unknown technology %d\n", tech);
 				} else {
-					if (sizeof(modem_msg_buffer.msg_text) > strlen(s)-1)
-						strncpy(modem_msg_buffer.msg_text, s, sizeof(modem_msg_buffer.msg_text));
-					modem_msg_buffer.msg_event = cellular_tech_event;
+					if (sizeof(modem_msg_buffer.mtext) > strlen(s)-1)
+						strncpy(modem_msg_buffer.mtext, s, sizeof(modem_msg_buffer.mtext));
+					modem_msg_buffer.event = MODEM_CELLULAR_TECH_EVENT;
 				}
 				break;
 		}
 	} else if (str_starts(s, "+CFUN: 0")) {
-		if (sizeof(modem_msg_buffer.msg_text) > strlen(s)-1)
-			strncpy(modem_msg_buffer.msg_text, s, sizeof (modem_msg_buffer.msg_text));
-		modem_msg_buffer.msg_event = modem_off_event;
-	} else if (str_starts(s, "+QIND: PB DONE")) {
-		if (sizeof(modem_msg_buffer.msg_text) > strlen(s)-1)
-			strncpy(modem_msg_buffer.msg_text, s, sizeof(modem_msg_buffer.msg_text));
-		modem_msg_buffer.msg_event = registration_event;
-		printf("registration_event2\n");
+		if (sizeof(modem_msg_buffer.mtext) > strlen(s)-1)
+			strncpy(modem_msg_buffer.mtext, s, sizeof (modem_msg_buffer.mtext));
+		modem_msg_buffer.event = MODEM_OFF_EVENT;
+/*	} else if (str_starts(s, "+QIND: PB DONE")) {
+		if (sizeof(modem_msg_buffer.mtext) > strlen(s)-1)
+			strncpy(modem_msg_buffer.mtext, s, sizeof(modem_msg_buffer.mtext));
+		modem_msg_buffer.event = REGISTRATION_EVENT; */
+	} else {
+		if (sizeof(modem_msg_buffer.mtext) > strlen(s)-1)
+			strncpy(modem_msg_buffer.mtext, s, sizeof(modem_msg_buffer.mtext));
+		modem_msg_buffer.event = MODEM_NO_EVENT;
 	}
 
-	int ret = radio_hal_msg_send(&modem_msg_buffer, msg_id, RADIO_MODEM, false);
-	printf("ret = %d\n", ret);
+    retval = fcntl(modem_fds[1], F_SETFL, fcntl(modem_fds[1], F_GETFL) | O_NONBLOCK);
+	if (retval)
+		hal_err(HAL_DBG_MODEM, "Ret from fcntl: %d\n", retval);
+
+	retval = write(modem_fds[1], &modem_msg_buffer, sizeof(struct radio_hal_msg_buffer));
+	if (!retval)
+		hal_err(HAL_DBG_MODEM, "Ret from write: %d\n", retval);
 }
 
 static int prepare_cmd_buf(char *buf, size_t len, const char *fmt, ...) {
@@ -701,6 +701,8 @@ int modem_hal_connect(struct radio_context *ctx) {
 			return -1;
 	}
 
+	/* todo double check needed initialisations */
+
 	/*  No auto-answer */
 	at_send_command("ATS0=0", NULL);
 	/*  Extended errors */
@@ -732,7 +734,6 @@ int modem_hal_connect(struct radio_context *ctx) {
 	at_send_command("AT+CGEREP=1,0", NULL);
 	/*  SMS PDU mode */
 	at_send_command("AT+CMGF=0", NULL);
-
 	/* Turn modem online*/
 	at_send_command("AT+CFUN=1", NULL);
 
@@ -857,7 +858,16 @@ error:
 	return -1;
 }
 
-static modem_SystemState init_handler(struct radio_context *ctx) {
+static modem_state registration_handler(struct radio_context *ctx, struct radio_hal_msg_buffer *msg) {
+	//struct radio_generic_func *radio_ops;
+	//radio_ops = ctx->cmn.rd_func;
+
+	hal_info(HAL_DBG_MODEM, "registration_handler %s\n", msg->mtext);
+
+	return MODEM_IF_UP_STATE;
+}
+
+static modem_state init_handler(struct radio_context *ctx, struct radio_hal_msg_buffer *msg) {
 	struct radio_generic_func *radio_ops;
 
 	radio_ops = ctx->cmn.rd_func;
@@ -865,57 +875,65 @@ static modem_SystemState init_handler(struct radio_context *ctx) {
 	hal_info(HAL_DBG_MODEM, "init_handler\n");
 	if (radio_ops->radio_connect(ctx)) {
 		sleep(1); // due modem booting up todo
-		return init_state;
+		return MODEM_INIT_STATE;
 	}
 
-	return initialised_state;
+	return MODEM_IF_UP_STATE;
 }
 
 //wifi state machine definition
 static modem_StateMachine modem_sStateMachine[] =
 		{       // from                  // event trigger        // event handler
-				{init_state, startup_event, init_handler},
-				{initialised_state, startup_event, init_handler},
+			{MODEM_INIT_STATE,        MODEM_STARTUP_EVENT,      init_handler},
+			{MODEM_IF_UP_STATE, MODEM_REGISTRATION_EVENT, registration_handler},
+			{MODEM_IF_UP_STATE,  MODEM_REGISTRATION_EVENT, registration_handler},
+			{MODEM_UNKNOWN_STATE,          MODEM_NO_EVENT,           nullptr} // Don't remove this line
 		};
 
 static void modem_events(struct radio_context *ctx) {
 	bool loop = true;
+	struct modem_softc *sc = (struct modem_softc *)ctx->radio_private;
 	modem_SystemEvent NewEvent;
-	modem_SystemState NextState = init_state;
-	struct radio_hal_msg_buffer modem_msg_buffer = {0, (radio_type)(0), 0, {0}};
-	int msg_id = 0;
+	struct radio_hal_msg_buffer modem_msg_buffer = {0, radio_type(0),0, {0}};
+	ssize_t size;
+	int err;
 
-	__attribute__((unused)) key_t key = radio_hal_msg_queue_init(RADIO_MODEM, &msg_id, 2022);
+	sc->state = MODEM_INIT_STATE;
+	NewEvent = MODEM_STARTUP_EVENT;
+
+	err = at_send_command("AT+CGREG?\n", nullptr);
+	if (err < 0)
+		hal_err(HAL_DBG_MODEM, "AT+CREG? failed");
 
 	while (loop) {
-		hal_info(HAL_DBG_MODEM, "EventState: %d\n", NextState);
+		hal_info(HAL_DBG_MODEM, "EventState: %d\n", sc->state);
 
-		if (NextState != init_state) {
-			printf("-----------------------------\n");
-			radio_hal_msg_recv(&modem_msg_buffer, msg_id, RADIO_MODEM);
-			NewEvent = (modem_SystemEvent) modem_msg_buffer.msg_event;
-			printf("++++++++++++++++++++++++++++++\n");
-		} else {
-			NewEvent = startup_event;
+		if (sc->state != MODEM_INIT_STATE) {
+			size = read(modem_fds[0], &modem_msg_buffer, sizeof(radio_hal_msg_buffer) );
+			NewEvent = (modem_SystemEvent) modem_msg_buffer.event;
 		}
 
-		if (NewEvent == no_event) {
-			hal_info(HAL_DBG_MODEM, "eNewEvent: %d\n", NewEvent);
-			continue;
-		}
+		hal_info(HAL_DBG_MODEM, "eNewEvent: %d (size %ld)\n", NewEvent, size);
 
-		if ((NextState < last_State) && (NewEvent < last_Event) &&
-			(modem_sStateMachine[NextState].StateMachineEvent == NewEvent) &&
-			(modem_sStateMachine[NextState].fpStateMachineEventHandler != nullptr)) {
-			// function call as per the state and event and return the next state of the finite state machine
-			NextState = (*modem_sStateMachine[NextState].fpStateMachineEventHandler)(ctx);
+		if ((sc->state < MODEM_LAST_STATE) && (NewEvent < MODEM_LAST_EVENT)) {
+			int i = 0;
+			// search from StateMachine
+			while (modem_sStateMachine[i].StateMachineEventHandler != nullptr) {
+				if ((modem_sStateMachine[i].StateMachineEvent == NewEvent) &&   // is supported event in StateMachine
+				    (modem_sStateMachine[i].StateMachine == sc->state)) {       // state transition is defined
+					break;
+				}
+				i++;
+			}
+			if (modem_sStateMachine[i].StateMachineEventHandler != nullptr)
+				sc->state = (*modem_sStateMachine[i].StateMachineEventHandler)(ctx, &modem_msg_buffer);
+			else
+				hal_warn(HAL_DBG_MODEM, "Not defined state state!!  %d\n", NewEvent);
+
 		} else {
-			hal_warn(HAL_DBG_MODEM, "Wifi state machine unknown event!!  %d\n", NewEvent);
+			hal_warn(HAL_DBG_MODEM, "Not defined event!!  %d\n", NewEvent);
 		}
 	}
-
-	radio_hal_msg_queue_destroy(RADIO_MODEM, msg_id);
-	msg_id = 0;
 }
 
 static struct radio_generic_func modem_hal_ops = {
@@ -954,6 +972,7 @@ __attribute__((unused)) int modem_hal_register_ops(struct radio_context *ctx) {
 struct radio_context *modem_hal_attach() {
 	struct radio_context *ctx = nullptr;
 	struct modem_softc *sc = nullptr;
+	int ret;
 
 	ctx = (struct radio_context *) malloc(sizeof(struct radio_context));
 	if (!ctx) {
@@ -970,6 +989,11 @@ struct radio_context *modem_hal_attach() {
 	ctx->radio_private = (void *) sc;
 	ctx->cmn.rd_func = &modem_hal_ops;
 	hal_info(HAL_DBG_MODEM, "Modem HAL attach completed\n");
+
+	ret = pipe(modem_fds);
+	if (ret)
+		hal_err(HAL_DBG_MODEM, "Modem communication pipe create\n");
+
 	return ctx;
 
 sc_alloc_failure:

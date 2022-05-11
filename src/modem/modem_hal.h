@@ -1,12 +1,45 @@
 #ifndef __MODEM_HAL_H__
 #define __MODEM_HAL_H__
 
+//Events
+enum modem_SystemEvent {
+	MODEM_NO_EVENT = -1,
+	MODEM_STARTUP_EVENT,
+	MODEM_DATA_CALL_EVENT,
+	MODEM_NITZ_EVENT,
+	MODEM_CELLULAR_TECH_EVENT,
+	MODEM_OFF_EVENT,
+	MODEM_REGISTRATION_EVENT,
+	MODEM_LAST_EVENT
+};
 
+//States
+enum modem_state {
+	MODEM_UNKNOWN_STATE = -1,
+	MODEM_INIT_STATE,
+	MODEM_IF_DOWN_STATE,
+	MODEM_IF_UP_STATE,
+	MODEM_ASSOCIATED_STATE,
+	MODEM_CONNECTED_STATE,
+	MODEM_DISCONNECTED_STATE,
+	MODEM_LAST_STATE  /* Don't remove */
+};
+
+//typedef of function pointer
+typedef modem_state (*modemEventHandler)(struct radio_context *ctx, struct radio_hal_msg_buffer *msg);
+
+//structure of state and event with event handler
+typedef struct {
+	modem_state StateMachine;
+	modem_SystemEvent StateMachineEvent;
+	modemEventHandler StateMachineEventHandler;
+} modem_StateMachine;
 
 struct modem_softc {
 	int atif;
 	char modem[20];
 	char wwan[20];
+	modem_state state;
 };
 
 typedef enum {

@@ -1,11 +1,14 @@
 #include <cstring>
 #include <yaml.h>
+#include <cerrno>
 #include "radio_hal.h"
 #include "radio_hal_yaml.h"
 #include "debug.h"
 
 #if not defined RADIO_HAL_UNIT_TEST
 static int debug = 1;
+
+#define member_size(type, member) sizeof(((type *)0)->member)
 
 static int radio_hal_yaml_bt_config(struct bt_config* conf_struct, char *key, char *value) {
 	if (debug)
@@ -21,42 +24,67 @@ static int radio_hal_yaml_z_config(struct z_config* conf_struct, char *key, char
 
 static int radio_hal_yaml_wifi_config(struct wifi_config* conf_struct, char *key, char *value)
 {
+	char *stopped;
+
 	/* TODO concurrency with single radio? */
 	if (debug)
 		hal_debug(HAL_DBG_WIFI, "radio_hal_wifi_config: key: %s value: %s\n", key, value);
 
-	if(!strcmp(key, "debug")) {
+	if(!strncmp(key, "debug", strlen("debug"))) {
 		conf_struct->debug = false;
-		if (!strcmp(value, "True"))
+		if (!strncmp(value, "True",strlen("True")))
 			conf_struct->debug = true;
-	} else if(!strcmp(key, "ssid")) {
-		strcpy(conf_struct->ssid, value);
-	} else if(!strcmp(key, "key")) {
-		strcpy(conf_struct->key, value);
-	} else if(!strcmp(key, "frequency")) {
-		strcpy(conf_struct->freq, value);
-	} else if(!strcmp(key, "api_version")) {
-		//strcpy(conf_struct->api_version, value);
-	} else if(!strcmp(key, "passphrase")) {
-		strcpy(conf_struct->passphrase, value);
-	} else if(!strcmp(key, "enc")) {
-		strcpy(conf_struct->enc, value);
-	} else if(!strcmp(key, "ap_mac")) {
-		strcpy(conf_struct->ap_mac_addr, value);
-	} else if(!strcmp(key, "country")) {
-		strcpy(conf_struct->country, value);
-	} else if(!strcmp(key, "bw")) {
-		strcpy(conf_struct->bw, value);
-	} else if(!strcmp(key, "preamble")) {
-		strcpy(conf_struct->preamble, value);
-	} else if(!strcmp(key, "distance")) {
-		//strcpy(conf_struct->distance, value);
-	} else if(!strcmp(key, "tx_power")) {
-		//strcpy(conf_struct->tx_power, value);
-	} else if(!strcmp(key, "mode")) {
-		strcpy(conf_struct->mode, value);
-	} else if(!strcmp(key, "type")) {
-		strcpy(conf_struct->type, value);
+	} else if(!strncmp(key, "ssid", strlen("ssid"))) {
+		if (strlen(value) - 1 < member_size(wifi_config, ssid))
+			strncpy(conf_struct->ssid, value, member_size(wifi_config, ssid));
+	} else if(!strncmp(key, "key", strlen("key"))) {
+		if (strlen(value) - 1 < member_size(wifi_config, key))
+			strncpy(conf_struct->key, value, member_size(wifi_config, key));
+	} else if(!strncmp(key, "frequency", strlen("frequency"))) {
+		if (strlen(value) - 1 < member_size(wifi_config, freq))
+			strncpy(conf_struct->freq, value, member_size(wifi_config, freq));
+	} else if(!strncmp(key, "api_version", strlen("api_version"))) {
+		errno = 0;
+		conf_struct->api_version = (int)strtol(value, &stopped, 10);
+		if (errno) {
+			hal_err(HAL_DBG_WIFI, "key: %s value: %s not valid\n", key, value);
+		}
+	} else if(!strncmp(key, "passphrase", strlen("passphrase"))) {
+		if (strlen(value) - 1 < member_size(wifi_config, passphrase))
+			strncpy(conf_struct->passphrase, value, member_size(wifi_config, passphrase));
+	} else if(!strncmp(key, "enc", strlen("enc"))) {
+		if (strlen(value) - 1 < member_size(wifi_config, enc))
+			strncpy(conf_struct->enc, value, member_size(wifi_config, enc));
+	} else if(!strncmp(key, "ap_mac", strlen("ap_mac"))) {
+		if (strlen(value) - 1 < member_size(wifi_config, ap_mac_addr))
+			strncpy(conf_struct->ap_mac_addr, value, member_size(wifi_config, ap_mac_addr));
+	} else if(!strncmp(key, "country", strlen("country"))) {
+		if (strlen(value) - 1 < member_size(wifi_config, country))
+			strncpy(conf_struct->country, value, member_size(wifi_config, country));
+	} else if(!strncmp(key, "bw", strlen("bw"))) {
+		if (strlen(value) - 1 < member_size(wifi_config, bw))
+			strncpy(conf_struct->bw, value, member_size(wifi_config, bw));
+	} else if(!strncmp(key, "preamble", strlen("preamble"))) {
+		if (strlen(value) - 1 < member_size(wifi_config, preamble))
+			strncpy(conf_struct->preamble, value, member_size(wifi_config, preamble));
+	} else if(!strncmp(key, "distance", strlen("distance"))) {
+		errno = 0;
+		conf_struct->distance= (int)strtol(value, &stopped, 10);
+		if (errno) {
+			hal_err(HAL_DBG_WIFI, "key: %s value: %s not valid\n", key, value);
+		}
+	} else if(!strncmp(key, "tx_power", strlen("tx_power"))) {
+		errno = 0;
+		conf_struct->tx_power = (int)strtol(value, &stopped, 10);
+		if (errno) {
+			hal_err(HAL_DBG_WIFI, "key: %s value: %s not valid\n", key, value);
+		}
+	} else if(!strncmp(key, "mode", strlen("mode"))) {
+		if (strlen(value) - 1 < member_size(wifi_config, mode))
+			strncpy(conf_struct->mode, value, member_size(wifi_config, mode));
+	} else if(!strncmp(key, "type", strlen("type"))) {
+		if (strlen(value) - 1 < member_size(wifi_config, type))
+			strncpy(conf_struct->type, value, member_size(wifi_config, type));
 	} else
 		hal_warn(HAL_DBG_WIFI, "no data structure for key!\n");
 
@@ -67,12 +95,15 @@ static int radio_hal_yaml_modem_config(struct modem_config* conf_struct, char *k
 	if (debug)
 		hal_debug(HAL_DBG_MODEM, "radio_hal_modem_config: key: %s value: %s\n", key, value);
 
-	if(!strcmp(key, "apn")) {
-		strcpy(conf_struct->apn, value);
-	} else if(!strcmp(key, "pin")) {
-		strcpy(conf_struct->pin, value);
-	} else if(!strcmp(key, "at_serial")) {
-		strcpy(conf_struct->at_serial, value);
+	if(!strncmp(key, "apn", strlen("apn"))) {
+		if (strlen(value) - 1 < member_size(modem_config, apn))
+			strncpy(conf_struct->apn, value, member_size(modem_config, apn));
+	} else if(!strncmp(key, "pin", strlen("pin"))) {
+		if (strlen(value) - 1 < member_size(modem_config, pin))
+			strncpy(conf_struct->pin, value, member_size(modem_config, pin));
+	} else if(!strncmp(key, "at_serial", strlen("at_serial"))) {
+		if (strlen(value) - 1 < member_size(modem_config, at_serial))
+			strncpy(conf_struct->at_serial, value, member_size(modem_config, at_serial));
 	} else
 		hal_warn(HAL_DBG_MODEM, "no data structure for key!\n");
 	return 0;

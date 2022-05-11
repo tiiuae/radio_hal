@@ -4,6 +4,8 @@
 #include <pthread.h>
 #include "debug.h"
 #include "radio_hal.h"
+#include "wifi_hal.h"
+#include "modem_hal.h"
 #include "radio_hal_yaml.h"
 
 
@@ -20,6 +22,8 @@ static void *wifi_event_loop(void *arg) {
 
 	// starts event loop handler
 	radio_ops->radio_event_loop(ctx);
+
+	radio_ops->close(ctx, RADIO_WIFI);
 	return nullptr;
 }
 
@@ -31,6 +35,8 @@ static void *modem_event_loop(void *arg) {
 
 	// starts event loop handler
 	radio_ops->radio_event_loop(ctx);
+
+	radio_ops->close(ctx, RADIO_MODEM);
 	return nullptr;
 }
 
@@ -147,7 +153,6 @@ int main(int argc, char *argv[]) {
 	for (int i = 0; i < count; i++) {
 		pthread_join(s_event_reader[i], NULL);
 	}
-
 	return 0;
 }
 
