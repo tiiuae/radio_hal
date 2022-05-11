@@ -16,7 +16,7 @@ static int test_radio_hal_api(struct radio_context *ctx, char *argv[],
 	char version[32] = {0};
 	char ifname[RADIO_IFNAME_SIZE] = {0};
 	char mac_addr[RADIO_MACADDR_SIZE] = {0};
-	char scan_results[4096] = {0};
+	char buf[4096] = {0};
 	struct radio_generic_func *radio_ops = ctx->cmn.rd_func;
 	char *cmd = argv[2];
 	struct wifi_config *w_config;
@@ -62,6 +62,11 @@ static int test_radio_hal_api(struct radio_context *ctx, char *argv[],
 			} else if(!strcmp(cmd, "radio_mesh_join")) {
 				radio_ops->radio_get_iface_name(ctx, ifname, 1);
 				radio_ops->radio_join_mesh(ctx);
+				radio_ops->radio_join_mesh(ctx, argv[3], argv[4], argv[5]);
+			} else if(!strcmp(cmd, "radio_get_fw_stats")) {
+				radio_ops->radio_get_iface_name(ctx, ifname, 1);
+				radio_ops->radio_get_fw_stats(ctx, buf, 4096, 1);
+				hal_info(HAL_DBG_WIFI, "%s\n", buf);
 			}
 			radio_ops->close(ctx, RADIO_WIFI);
 			break;
