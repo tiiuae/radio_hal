@@ -12,11 +12,11 @@ function help
 	echo
 	echo "example:"
 	echo "sudo $0 mesh test 12345678 192.168.1.2 255.255.255.0 5220"
-	echo "sudo $0 ap test 12345678 192.168.1.2 255.255.255.0"
-	echo "sudo $0 sta test 12345678 192.168.1.2 255.255.255.0"
+	echo "sudo $0 ap test 12345678 192.168.1.2 255.255.255.0 5220"
+	echo "sudo $0 sta test 12345678 192.168.1.2 255.255.255.0 5220"
 	echo
 	echo "modem example:"
-	echo "sudo $0 modem internet 1234"
+	echo "sudo $0 modem internet 1234 /dev/ttyUSB2"
 	exit
 }
 

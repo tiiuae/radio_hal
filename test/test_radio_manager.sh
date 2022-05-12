@@ -20,14 +20,9 @@ fi
 
 mesh_activation()
 {
-	killall alfred 2>/dev/null
-	killall batadv-vis 2>/dev/null
-	rm -f /var/run/alfred.sock
-
-	modprobe batman-adv
-
-	radio_manager -w $1
-
+#	radio_manager -w $1 &
+	echo "start in separate shell: radio_manager -w wifi_example.yaml"
+	sleep 5
 	echo "bat0 up.."
 	batctl if add mesh0
 	ifconfig bat0 up
@@ -52,9 +47,11 @@ mesh_activation()
 
 modem_activation()
 {
-  radio_manager -m $1
+  #radio_manager -m $1
+  echo "start in separate shell: radio_manager -m modem_example.yaml"
+  sleep 5
   ### get cdc-wdm device ####
-  device=$(ls /sys/class/usbmisc/ |grep cdc)
+  device=$(basename -- "$(echo /sys/class/usbmisc/cdc*)")
 
   ### get wwan name ###
   wwan=$(qmicli --device=/dev/"$device" --get-wwan-iface)
@@ -66,6 +63,7 @@ off()
 {
 	# service off
 	pkill -f "/tmp/wpa_supplicant.conf" 2>/dev/null
+	pkill radio_manager
 	rm -fr /tmp/wpa* 2>/dev/null
 	killall alfred 2>/dev/null
 	killall batadv-vis 2>/dev/null

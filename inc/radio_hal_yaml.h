@@ -1,8 +1,6 @@
 #ifndef RADIO_HAL_RADIO_HAL_YAML_H
 #define RADIO_HAL_RADIO_HAL_YAML_H
 
-#include "radio_hal.h"
-
 struct wifi_config {
 	bool debug;
 	int api_version;		// interface version for future purposes
