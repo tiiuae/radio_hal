@@ -51,18 +51,17 @@ static int test_radio_hal_api(struct radio_context *ctx, char *argv[],
 				radio_ops->radio_get_mac_address(ctx, mac_addr, 1);
 				hal_info(HAL_DBG_WIFI, "MACADDR:%s \n", mac_addr);
 			} else if(!strcmp(cmd, "radio_hal_get_scan_result")) {
-				radio_ops->radio_get_scan_results(ctx, scan_results);
-				hal_info(HAL_DBG_WIFI, "%s\n", scan_results);
+				radio_ops->radio_get_scan_results(ctx, buf);
+				hal_info(HAL_DBG_WIFI, "%s\n", buf);
 			} else if(!strcmp(cmd, "radio_hal_connect_ap")) {
-				radio_ops->radio_get_scan_results(ctx, scan_results);
-				hal_info(HAL_DBG_WIFI, "%s\n", scan_results);
+				radio_ops->radio_get_scan_results(ctx, buf);
+				hal_info(HAL_DBG_WIFI, "%s\n", buf);
 				radio_ops->radio_connect_ap(ctx);
 			} else if(!strcmp(cmd, "radio_hal_create_ap")) {
 				radio_ops->radio_create_ap(ctx);
 			} else if(!strcmp(cmd, "radio_mesh_join")) {
 				radio_ops->radio_get_iface_name(ctx, ifname, 1);
 				radio_ops->radio_join_mesh(ctx);
-				radio_ops->radio_join_mesh(ctx, argv[3], argv[4], argv[5]);
 			} else if(!strcmp(cmd, "radio_get_fw_stats")) {
 				radio_ops->radio_get_iface_name(ctx, ifname, 1);
 				radio_ops->radio_get_fw_stats(ctx, buf, 4096, 1);
