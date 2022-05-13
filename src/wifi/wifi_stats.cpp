@@ -1,16 +1,16 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include "radio_hal.h"
+#include "../../inc/radio_hal.h"
 #include "wifi_hal.h"
 #include <sys/stat.h>
 
-int wifi_debugfs_init(struct wifi_softc *sc)
+__attribute__((unused)) int wifi_debugfs_init(struct wifi_softc *sc, int index)
 {
 	struct stat st;
 
 	/*To Do:  Check if debugfs is mounted */
-	snprintf(sc->nl_ctx.debugfs_root, RADIO_DEBUGFS_DIRSIZE, "%s%s%s%s", "/sys/kernel/debug/ieee80211/", "phy", sc->nl_ctx.phyname, "/ath10k/");
+	snprintf(sc->nl_ctx.debugfs_root, RADIO_DEBUGFS_DIRSIZE, "%s%s%s%s", "/sys/kernel/debug/ieee80211/", "phy", sc->nl_ctx.phyname[index], "/ath10k/");
 	if (stat(sc->nl_ctx.debugfs_root, &st))
 		goto exit;
 

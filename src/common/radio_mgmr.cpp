@@ -62,6 +62,7 @@ int main(int argc, char *argv[]) {
 	//other
 	struct radio_context *z_ctx = nullptr;
 	struct radio_context *b_ctx = nullptr;
+	//int index = atoi(argv[2]);
 
 	struct option long_opt[] =
 			{
