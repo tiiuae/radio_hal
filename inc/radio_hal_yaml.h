@@ -36,6 +36,6 @@ struct modem_config {
 };
 
 
-int radio_hal_yaml_config(void *conf_struct, const char* yaml_file, radio_type radio);
+int radio_hal_yaml_config(void *conf_struct, char* yaml_file, radio_type radio);
 
 #endif //RADIO_HAL_RADIO_HAL_YAML_H

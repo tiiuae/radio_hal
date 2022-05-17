@@ -84,7 +84,9 @@ int main(int argc, char *argv[]) {
 				} else
 					w_radio_ops = w_ctx->cmn.rd_func;
 
-				w_ctx->config = malloc(sizeof(wifi_config));
+				for (int i = 0; i<WIFI_RADIO_MAX; i++)
+					w_ctx->config[i] = malloc(sizeof(wifi_config));
+
 				if (optarg)
 					ret = radio_hal_yaml_config(w_ctx->config, (char *) optarg, RADIO_WIFI);
 				if (ret < 0)
@@ -104,14 +106,14 @@ int main(int argc, char *argv[]) {
 				b_ctx = radio_hal_attach(RADIO_BT);
 				if (!b_ctx)
 					hal_err(HAL_DBG_BT, "failed to attach BT Radio HAL\n");
-				b_ctx->config = malloc(sizeof(bt_config));
+				b_ctx->config[0] = malloc(sizeof(bt_config));
 				ret = radio_hal_yaml_config(b_ctx->config, (char *)optarg, RADIO_BT);
 				break;
 			case 'z':
 				z_ctx = radio_hal_attach(RADIO_15_4);
 				if (!z_ctx)
 					hal_err(HAL_DBG_BT, "failed to attach 15.4 Radio HAL\n");
-				z_ctx->config = malloc(sizeof(z_config));
+				z_ctx->config[0] = malloc(sizeof(z_config));
 				ret = radio_hal_yaml_config(z_ctx->config, (char *)optarg, RADIO_15_4);
 				break;
 			case 'm':
@@ -122,7 +124,7 @@ int main(int argc, char *argv[]) {
 				} else
 					m_radio_ops = m_ctx->cmn.rd_func;
 
-				m_ctx->config = malloc(sizeof(modem_config));
+				m_ctx->config[0] = malloc(sizeof(modem_config));
 				if (optarg)
 					ret = radio_hal_yaml_config(m_ctx->config, (char *) optarg,  RADIO_MODEM);
 				if (ret < 0)

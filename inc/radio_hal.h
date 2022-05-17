@@ -7,6 +7,8 @@
 #define RADIO_PHYNAME_SIZE 8
 #define RADIO_HAL_VERSION_SIZE 32
 #define RADIO_MACADDR_SIZE 18
+#define RADIO_MAX_AMOUNT 2           // max amount of wifis supported
+
 
 enum radio_state {
 	RADIO_IDLE_STATE,
@@ -104,7 +106,7 @@ struct radio_common {
 struct radio_context {
 	struct radio_common cmn;
 	void *radio_private;
-	void *config;
+	void *config[RADIO_MAX_AMOUNT];
 };
 
 // structure for message queue and messaging

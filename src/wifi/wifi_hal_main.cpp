@@ -213,10 +213,19 @@ static int wifi_hal_ifname_resp_hdlr(struct nl_msg *msg, void *arg)
 			nullptr);
 
 	for (int i=0; i < WIFI_RADIO_MAX; i++) {
+
+		for (int x=0; x < WIFI_RADIO_MAX; x++){
+			if (strncmp(nl_ctx->ifname[x], nla_get_string(tb_msg[NL80211_ATTR_IFNAME]), strlen("wlp5s0")) == 0) {
+				goto skip;
+			}
+		}
+
 		if (nl_ctx->ifname[i][0] ==  '\0' && tb_msg[NL80211_ATTR_IFNAME]) {
 			snprintf(nl_ctx->ifname[i], RADIO_IFNAME_SIZE, "%s", nla_get_string(tb_msg[NL80211_ATTR_IFNAME]));
-			nl_ctx->ifindex[i] = (int)nla_get_u32(tb_msg[NL80211_ATTR_IFINDEX]);
+			nl_ctx->ifindex[i] = (int) nla_get_u32(tb_msg[NL80211_ATTR_IFINDEX]);
 		}
+skip:
+		asm("NOP");
 	}
 
 	return NL_SKIP;
@@ -880,7 +889,7 @@ static int wifi_hal_get_scan_results(struct radio_context *ctx, char *results, i
 static int wifi_hal_connect_ap(struct radio_context *ctx, int index)
 {
 	struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
-	struct wifi_config *config = (struct wifi_config *)ctx->config;
+	struct wifi_config *config = (struct wifi_config *)ctx->config[index];
 	char cmd_buf[CMD_BUFFER_SIZE] = {0};
 	char resp_buf[RESP_BUFFER_SIZE] = {0};
 	char nw_id[6] = {0};
@@ -934,7 +943,7 @@ static int wifi_hal_connect_ap(struct radio_context *ctx, int index)
 static int wifi_hal_create_ap(struct radio_context *ctx, int index)
 {
 	struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
-	struct wifi_config *config = (struct wifi_config *)ctx->config;
+	struct wifi_config *config = (struct wifi_config *)ctx->config[index];
 	char cmd_buf[CMD_BUFFER_SIZE] = {0};
 	char resp_buf[RESP_BUFFER_SIZE] = {0};
 	char nw_id[6] = {0};
@@ -1015,7 +1024,7 @@ static int wifi_hal_create_ap(struct radio_context *ctx, int index)
 static int wifi_hal_join_mesh(struct radio_context *ctx, int index)
 {
 	struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
-	struct wifi_config *config = (struct wifi_config *)ctx->config;
+	struct wifi_config *config = (struct wifi_config *)ctx->config[index];
 	char cmd_buf[CMD_BUFFER_SIZE] = {0};
 	char resp_buf[RESP_BUFFER_SIZE] = {0};
 	char nw_id[6] = {0};
@@ -1300,12 +1309,11 @@ static wifi_state disconnected_handler(struct radio_context *ctx, int index) {
 
 static wifi_state init_handler(struct radio_context *ctx, int index) {
 	struct radio_generic_func *radio_ops;
-	char ifname[RADIO_IFNAME_SIZE] = {0};
+	struct wifi_config *config;
+	struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
 
-	struct wifi_config *config = (struct wifi_config *)ctx->config;
-
+	config = (struct wifi_config *)ctx->config[index];
 	radio_ops = ctx->cmn.rd_func;
-	radio_ops->radio_get_iface_name(ctx, ifname, 1);
 
     /* TODO This content is for test purposes */
 	if (strncmp(config->mode, "ap", 2) == 0) {
@@ -1313,11 +1321,14 @@ static wifi_state init_handler(struct radio_context *ctx, int index) {
 	} else 	if (strncmp(config->mode, "sta", 3) == 0) {
 		radio_ops->radio_connect_ap(ctx, index);
 	} else if (strncmp(config->mode, "mesh", 4) == 0) {
-		radio_ops->radio_join_mesh(ctx, 0);
-		radio_ops->radio_create_ap(ctx, 1);
+		radio_ops->radio_join_mesh(ctx, index);
 	} else {
 		return UNKNOWN_STATE;
 	}
+
+	/* to get all wifi radios initialised */
+	if (index < sc->radio_amount-1)
+		return INIT_STATE;
 
 	return IF_UP_STATE;
 }
@@ -1340,7 +1351,7 @@ static void wifi_events(struct radio_context *ctx)
 	bool loop = true;
 	wifi_SystemEvent eNewEvent;
 
-	int index = 1; // TODO
+	int index = -1; // TODO used for initialisation loop
 
 	sc->state = INIT_STATE;
 	eNewEvent = STARTUP_EVENT;
@@ -1351,7 +1362,9 @@ static void wifi_events(struct radio_context *ctx)
 			// read next events
 			nread = wifi_hal_wait_on_event(sc, index, resp_buf, len);
 			eNewEvent = wifi_hal_map_wpa_event_to_state(resp_buf, nread);
-			sleep(5);
+		} else {
+			index++;
+			eNewEvent = STARTUP_EVENT;
 		}
 
         if (eNewEvent == NO_EVENT) {
