@@ -14,6 +14,7 @@ WIFI_HAL_DIR = wifi
 WPA_CTL_DIR = wpa_socket
 MODEM_HAL_DIR = modem
 AT_CTL_DIR = at
+COEX_DIR = coex
 
 ifndef CXX
 CXX=g++
@@ -39,12 +40,14 @@ CFLAGS = -MMD -O2 -Wall -Werror -g -fPIC -I$(INC_DIR)/ \
 				-I$(SRC_DIR)/$(WIFI_HAL_DIR)/ \
 				-I$(SRC_DIR)/$(MODEM_HAL_DIR)/ \
 				-I$(SRC_DIR)/$(MODEM_HAL_DIR)/$(AT_CTL_DIR)/ \
+				-I$(SRC_DIR)/$(COEX_DIR)/ \
 				-I$(SRC_DIR)/$(WIFI_HAL_DIR)/$(WPA_CTL_DIR)/ \
 				-I/usr/include/libnl3/ -std=${CSTD}
 CXXFLAGS += -MMD -O2 -Wall -Werror -g -fPIC -I$(INC_DIR)/ \
 				-I$(SRC_DIR)/$(WIFI_HAL_DIR)/ \
 				-I$(SRC_DIR)/$(MODEM_HAL_DIR)/ \
 				-I$(SRC_DIR)/$(MODEM_HAL_DIR)/$(AT_CTL_DIR)/ \
+				-I$(SRC_DIR)/$(COEX_DIR)/ \
 				-I$(SRC_DIR)/$(WIFI_HAL_DIR)/$(WPA_CTL_DIR)/ \
 				-I/usr/include/libnl3/ \
 				-std=${CXXSTD}
@@ -68,6 +71,7 @@ OBJ+=$(SRC_DIR)/$(CMN_SRC_DIR)/radio_hal_yaml.o \
 				$(SRC_DIR)/$(MODEM_HAL_DIR)/$(AT_CTL_DIR)/at_tok.o \
 				$(SRC_DIR)/$(MODEM_HAL_DIR)/$(AT_CTL_DIR)/atchannel.o \
 				$(SRC_DIR)/$(MODEM_HAL_DIR)/$(AT_CTL_DIR)/misc.o \
+				$(SRC_DIR)/$(COEX_DIR)/radio_coex.o \
 
 %.o: %.cpp
 	$(CXX) -c -fPIC  $(CXXFLAGS) ${COPTS} $< -o $@
