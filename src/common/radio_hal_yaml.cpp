@@ -152,14 +152,6 @@ int radio_hal_yaml_config(void *conf_struct, char* config_files, radio_type radi
 		do {
 			yaml_parser_scan(&parser, &token);
 			switch (token.type) {
-				/*
-				case YAML_STREAM_START_TOKEN: printf("STREAM START"); break;
-				case YAML_STREAM_END_TOKEN:   printf("STREAM END");   break;
-				case YAML_BLOCK_SEQUENCE_START_TOKEN: printf("<b>Start Block (Sequence)</b>"); break;
-				case YAML_BLOCK_ENTRY_TOKEN:          printf("<b>Start Block (Entry)</b>");    break;
-				case YAML_BLOCK_END_TOKEN:            printf("<b>End block</b>");              break;
-				case YAML_BLOCK_MAPPING_START_TOKEN:  printf("[Block mapping]");            break;
-				 */
 				case YAML_KEY_TOKEN:
 					key = true;
 					break;
@@ -196,7 +188,6 @@ int radio_hal_yaml_config(void *conf_struct, char* config_files, radio_type radi
 					}
 					break;
 				default:
-					//printf("Got token of type %d\n", token.type);
 					break;
 			}
 			if (token.type != YAML_STREAM_END_TOKEN)
@@ -205,8 +196,6 @@ int radio_hal_yaml_config(void *conf_struct, char* config_files, radio_type radi
 
 		yaml_token_delete(&token);
 		yaml_parser_delete(&parser);
-		//printf("%s (%d events)\n", (error ? "FAILURE" : "SUCCESS"), count);
-
 		fclose(configuration);
 
 		file_name = strtok(NULL, " ");
