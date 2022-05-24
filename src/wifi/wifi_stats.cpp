@@ -5,12 +5,62 @@
 #include "wifi_hal.h"
 #include <sys/stat.h>
 
+static inline const char *wifi_get_dbgfs_basedir(enum wifi_driver_version drv_version)
+{
+    static const char *base_dir[] = { "ath9k", "ath10k", "ath11k", "",  ""};
+
+    return base_dir[drv_version];
+}
+
+static void wifi_get_driver_version(struct wifi_softc *sc)
+{
+	struct stat stats;
+	char dir[64] = {0};
+
+	snprintf(dir, 64, "%s%s%s%s", "/sys/kernel/debug/ieee80211/", "phy", sc->nl_ctx.phyname, "/ath9k/");
+	stat(dir, &stats);
+
+	if (S_ISDIR(stats.st_mode)) {
+		sc->nl_ctx.drv_version = WIFI_DRIVER_ATH9K;
+		return;
+	}
+
+	memset(dir, 0,  64);
+	snprintf(dir, 64, "%s%s%s%s", "/sys/kernel/debug/ieee80211/", "phy", sc->nl_ctx.phyname, "/ath10k/");
+	stat(dir, &stats);
+
+	if (S_ISDIR(stats.st_mode)) {
+		sc->nl_ctx.drv_version = WIFI_DRIVER_ATH10K;
+		return;
+	}
+
+	memset(dir, 0,  64);
+	snprintf(dir, 64, "%s%s%s%s", "/sys/kernel/debug/ieee80211/", "phy", sc->nl_ctx.phyname, "/ath11k/");
+	stat(dir, &stats);
+
+	if (S_ISDIR(stats.st_mode)) {
+		sc->nl_ctx.drv_version = WIFI_DRIVER_ATH11K;
+		return;
+	}
+
+	memset(dir, 0,  64);
+	snprintf(dir, 64, "%s", "sys/kernel/debug/brcmfmac/");
+	stat(dir, &stats);
+
+	if (S_ISDIR(stats.st_mode)) {
+		sc->nl_ctx.drv_version = WIFI_DRIVER_BRCM_FMAC;
+		return;
+	}
+
+}
+
 int wifi_debugfs_init(struct wifi_softc *sc)
 {
 	struct stat st;
 
+	wifi_get_driver_version(sc);
 	/*To Do:  Check if debugfs is mounted */
-	snprintf(sc->nl_ctx.debugfs_root, RADIO_DEBUGFS_DIRSIZE, "%s%s%s%s", "/sys/kernel/debug/ieee80211/", "phy", sc->nl_ctx.phyname, "/ath10k/");
+	snprintf(sc->nl_ctx.debugfs_root, RADIO_DEBUGFS_DIRSIZE, "%s%s%s%s%s%s", "/sys/kernel/debug/ieee80211/", "phy", sc->nl_ctx.phyname, "/", wifi_get_dbgfs_basedir(sc->nl_ctx.drv_version), "/");
 	if (stat(sc->nl_ctx.debugfs_root, &st))
 		goto exit;
 
