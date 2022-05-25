@@ -1,9 +1,11 @@
+#include <cerrno>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include "radio_hal.h"
 #include "wifi_hal.h"
 #include <sys/stat.h>
+#include <time.h>
 
 static inline const char *wifi_get_dbgfs_basedir(enum wifi_driver_version drv_version)
 {
@@ -146,3 +148,43 @@ int wifi_get_fw_stats(struct wifi_softc *sc, char *buf, int buf_size)
 	return wifi_debugfs_read(sc, "fw_stats", buf, buf_size);
 }
 
+int wifi_capture_spectral_scan(struct wifi_softc *sc)
+{
+	char filename[64];
+	FILE *fp;
+	char *cmd;
+        int ret = 0;
+
+	snprintf(filename, 64, "/var/log/spectral_data_%s%s", __DATE__, __TIME__);
+	if (sc->nl_ctx.drv_version == WIFI_DRIVER_ATH9K) {
+                ret = wifi_debugfs_write(sc, "spectral_scan_ctl", "chanscan");
+                if(ret)
+                        goto error;
+		wifi_hal_trigger_scan(sc);
+                ret = wifi_debugfs_write(sc, "spectral_scan_ctl", "disable");
+                if(ret)
+                        goto error;
+		ret = asprintf(&cmd, "cat /sys/kernel/debug/ieee80211/phy%s/ath9k/%s%s", sc->nl_ctx.phyname, "spectral_scan0 > ", filename);
+	} else if (sc->nl_ctx.drv_version == WIFI_DRIVER_ATH10K) {
+                ret = wifi_debugfs_write(sc, "spectral_scan_ctl", "background");
+                if(ret)
+                        goto error;
+                ret = wifi_debugfs_write(sc, "spectral_scan_ctl", "trigger");
+                if(ret)
+                        goto error;
+		wifi_hal_trigger_scan(sc);
+                ret = wifi_debugfs_write(sc, "spectral_scan_ctl", "disable");
+                if(ret)
+                        goto error;
+		ret = asprintf(&cmd, "cat /sys/kernel/debug/ieee80211/phy%s/ath10k/%s%s", sc->nl_ctx.phyname, "spectral_scan0 > ", filename);
+	} else {
+		return -ENOTSUP;
+	}
+
+	fp = popen(cmd, "r");
+	if (fp)
+	        pclose(fp);
+
+error:
+        return ret;
+}

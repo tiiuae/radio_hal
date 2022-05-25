@@ -93,4 +93,6 @@ struct radio_context* wifi_hal_attach();
 int wifi_hal_dettach(struct radio_context *ctx);
 int wifi_debugfs_init(struct wifi_softc *sc);
 int wifi_get_fw_stats(struct wifi_softc *sc, char *buf, int buf_size);
+int wifi_capture_spectral_scan(struct wifi_softc *sc);
+int wifi_hal_trigger_scan(struct wifi_softc *sc);
 #endif
