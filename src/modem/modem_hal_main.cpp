@@ -895,7 +895,7 @@ static void modem_events(struct radio_context *ctx) {
 	struct modem_softc *sc = (struct modem_softc *)ctx->radio_private;
 	modem_SystemEvent NewEvent;
 	struct radio_hal_msg_buffer modem_msg_buffer = {0, radio_type(0),0, {0}};
-	ssize_t size;
+	ssize_t size = 0;
 	int err;
 
 	sc->state = MODEM_INIT_STATE;
