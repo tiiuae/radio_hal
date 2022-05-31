@@ -6,6 +6,8 @@
 #include "wifi_hal.h"
 #include <sys/stat.h>
 #include <time.h>
+#include <unistd.h>
+#include "debug.h"
 
 static inline const char *wifi_get_dbgfs_basedir(enum wifi_driver_version drv_version)
 {
@@ -106,13 +108,13 @@ int  wifi_debugfs_write(struct wifi_softc *sc, const char *filename, const char 
 	int written = 0;
 	FILE *file;
 
-	file = wifi_debugfs_open(sc, filename, "r");
+	file = wifi_debugfs_open(sc, filename, "w");
 	if(!file)
 		return -1;
 
 	written = fwrite(cmd, 1, strlen(cmd), file);
 	if ((size_t)written != strlen(cmd))
-		printf("write is not matching with cmd param\n");
+		hal_err(HAL_DBG_WIFI, "write is not matching with cmd param\n");
 
 	fflush(file);
 	fclose(file);
@@ -151,16 +153,22 @@ int wifi_get_fw_stats(struct wifi_softc *sc, char *buf, int buf_size)
 int wifi_capture_spectral_scan(struct wifi_softc *sc)
 {
 	char filename[64];
+	time_t rawtime;
+	struct tm *timeinfo;
 	FILE *fp;
 	char *cmd;
         int ret = 0;
 
-	snprintf(filename, 64, "/var/log/spectral_data_%s%s", __DATE__, __TIME__);
+	time(&rawtime);
+	timeinfo = localtime(&rawtime);
+	strftime(filename, 64, "/var/log/spectral_data_%s", timeinfo);
 	if (sc->nl_ctx.drv_version == WIFI_DRIVER_ATH9K) {
                 ret = wifi_debugfs_write(sc, "spectral_scan_ctl", "chanscan");
                 if(ret)
                         goto error;
 		wifi_hal_trigger_scan(sc);
+		/* wait for scan to complete */
+		sleep(2);
                 ret = wifi_debugfs_write(sc, "spectral_scan_ctl", "disable");
                 if(ret)
                         goto error;
@@ -173,6 +181,8 @@ int wifi_capture_spectral_scan(struct wifi_softc *sc)
                 if(ret)
                         goto error;
 		wifi_hal_trigger_scan(sc);
+		/* wait for scan to complete */
+		sleep(2);
                 ret = wifi_debugfs_write(sc, "spectral_scan_ctl", "disable");
                 if(ret)
                         goto error;
