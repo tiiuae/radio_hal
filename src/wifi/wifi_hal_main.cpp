@@ -1,17 +1,12 @@
 #include <unistd.h>
 #include <cstdint>
-#include <fcntl.h>
-#include <unistd.h>
 #include <cstdarg>
 #include <cerrno>
-#include <sys/ipc.h>
-#include <sys/msg.h>
 #include <netlink/attr.h>
 #include <netlink/genl/ctrl.h>
 #include <netlink/genl/genl.h>
 #include <netlink/handlers.h>
 #include <netlink/msg.h>
-#include <netlink/genl/family.h>
 #include <netlink/netlink.h>
 #include <netlink/socket.h>
 #include <linux/if_ether.h>
@@ -24,7 +19,6 @@
 #include "radio_hal_yaml.h"
 #include "wifi_hal.h"
 
-#include "wifi_frame_helper.h"
 #include "wpa_socket/wpa_ctrl.h"
 
 #define WIFI_RADIO_HAL_MAJOR_VERSION 1
@@ -38,9 +32,7 @@
 #define RESP_BUFFER_SIZE sizeof(char) * 2048
 #define SOCKET_PATH_LENGTH sizeof(char) * 64
 
-#define MESH_NAME (const char *)"wlp1s0"
-
-static const char *client_socket_dir = nullptr;
+static const char *client_socket_dir[WIFI_RADIO_MAX] = {nullptr, nullptr};
 static int debug;
 
 static int wifi_hal_nl_finish_handler(struct nl_msg *msg, void *arg)
@@ -119,25 +111,30 @@ static int replace_line_change(char *buf, size_t size) {
 	return 0;
 }
 
-static int wifi_hal_get_phyname(struct wifi_softc *sc, char *cmd, char *resp_buf, int resp_size)
+static int wifi_hal_get_phyname(struct wifi_softc *sc)
 {
-	int ret;
+	char cmd_buf[CMD_BUFFER_SIZE] = {0};
+	char resp_buf[RESP_BUFFER_SIZE] = {0};
+	int ret = 0;
 
-	snprintf(cmd, CMD_BUFFER_SIZE, "iw dev %s info | grep wiphy | awk '{print $2}'", sc->nl_ctx.ifname);
-	ret = wifi_hal_run_sys_cmd(cmd, resp_buf, resp_size);
-	if (ret) {
-		hal_err(HAL_DBG_WIFI, "failed to get phyname\n");
-		return -1;
+	for (int i = 0; i < WIFI_RADIO_MAX; i++) {
+		snprintf(cmd_buf, CMD_BUFFER_SIZE, "iw dev %s info | grep wiphy | awk '{print $2}'", sc->nl_ctx.ifname[i]);
+		ret = wifi_hal_run_sys_cmd(cmd_buf, resp_buf, RESP_BUFFER_SIZE - 1);
+		if (ret) {
+			hal_err(HAL_DBG_WIFI, "failed to get phyname\n");
+			return -1;
+		}
+		ret = replace_line_change(resp_buf, (size_t)RESP_BUFFER_SIZE-1);
+		if (ret<0) {
+			hal_err(HAL_DBG_WIFI, "fail with phyname\n");
+			return -1;
+		}
+
+		if (strlen(resp_buf) < sizeof(sc->nl_ctx.phyname[i]) - 1)
+			strncpy(sc->nl_ctx.phyname[i], resp_buf, sizeof(sc->nl_ctx.phyname[i]));
+		sc->radio_amount+=1;
+		hal_info(HAL_DBG_WIFI, "phy%s %s\n", sc->nl_ctx.phyname[i], sc->nl_ctx.ifname[i]);
 	}
-
-	ret = replace_line_change(resp_buf, (size_t)resp_size);
-	if (ret<0) {
-		hal_err(HAL_DBG_WIFI, "fail with phyname\n");
-		return -1;
-	}
-
-	if (debug)
-		hal_debug(HAL_DBG_WIFI, "phyname |%s|\n", resp_buf);
 
 	return 0;
 }
@@ -187,18 +184,18 @@ __attribute__((unused)) int wifi_hal_frequency_to_channel(int freq)
 		return 0;
 }
 
-static void get_mac_addr(struct wifi_softc *sc, char *mac_addr)
+static void get_mac_addr(struct wifi_softc *sc, char *mac_addr, int index)
 {
 	struct ifreq if_req = {{0}};
 	int fd = socket(AF_INET, SOCK_DGRAM, 0);
 	unsigned char *mac;
 
 	if_req.ifr_addr.sa_family = AF_INET;
-	strncpy(if_req.ifr_name, sc->nl_ctx.ifname, RADIO_IFNAME_SIZE);
+	strncpy(if_req.ifr_name, sc->nl_ctx.ifname[index], RADIO_IFNAME_SIZE-1);
 	ioctl(fd, SIOCGIFHWADDR, &if_req);
 	close(fd);
 	mac = (unsigned char*)if_req.ifr_hwaddr.sa_data;
-	wifi_hal_mac_addr_n2a(sc->mac_addr, mac);
+	wifi_hal_mac_addr_n2a(sc->mac_addr[index], mac);
 	wifi_hal_mac_addr_n2a(mac_addr, mac);
 }
 
@@ -215,14 +212,21 @@ static int wifi_hal_ifname_resp_hdlr(struct nl_msg *msg, void *arg)
 			genlmsg_attrlen(hdr, 0),
 			nullptr);
 
-	if (tb_msg[NL80211_ATTR_IFNAME]) {
-		snprintf(nl_ctx->ifname, RADIO_IFNAME_SIZE, "%s", nla_get_string(tb_msg[NL80211_ATTR_IFNAME]));
-	}
+	for (int i=0; i < WIFI_RADIO_MAX; i++) {
 
-	if (tb_msg[NL80211_ATTR_IFINDEX]) {
-		(nl_ctx->ifindex = (int)nla_get_u32(tb_msg[NL80211_ATTR_IFINDEX]));
-	}
+		for (int x=0; x < WIFI_RADIO_MAX; x++){
+			if (strncmp(nl_ctx->ifname[x], nla_get_string(tb_msg[NL80211_ATTR_IFNAME]), strlen("wlp5s0")) == 0) {
+				goto skip;
+			}
+		}
 
+		if (nl_ctx->ifname[i][0] ==  '\0' && tb_msg[NL80211_ATTR_IFNAME]) {
+			snprintf(nl_ctx->ifname[i], RADIO_IFNAME_SIZE, "%s", nla_get_string(tb_msg[NL80211_ATTR_IFNAME]));
+			nl_ctx->ifindex[i] = (int) nla_get_u32(tb_msg[NL80211_ATTR_IFINDEX]);
+		}
+skip:
+		asm("NOP");
+	}
 
 	return NL_SKIP;
 }
@@ -230,7 +234,7 @@ static int wifi_hal_ifname_resp_hdlr(struct nl_msg *msg, void *arg)
 static int wifi_hal_connection_info_hdlr(struct nl_msg *msg, void *arg)
 {
 	struct wifi_softc *sc = (struct wifi_softc *)arg;
-	/* struct netlink_ctx *nl_ctx = &sc->nl_ctx; TODO future? */
+	struct netlink_ctx *nl_ctx = &sc->nl_ctx;
 	struct nlattr *tb_msg[NL80211_ATTR_MAX + 1];
 	struct genlmsghdr *hdr = (struct genlmsghdr *)nlmsg_data(nlmsg_hdr(msg));
 	struct nlattr *sinfo[NL80211_STA_INFO_MAX + 1];
@@ -249,8 +253,6 @@ static int wifi_hal_connection_info_hdlr(struct nl_msg *msg, void *arg)
 	sta_info[NL80211_STA_INFO_LLID].type = NLA_U16;
 	sta_info[NL80211_STA_INFO_PLID].type = NLA_U16;
 	sta_info[NL80211_STA_INFO_PLINK_STATE].type = NLA_U8;
-
-
 	rate_info[NL80211_RATE_INFO_BITRATE].type = NLA_U16;
 	rate_info[NL80211_RATE_INFO_MCS].type = NLA_U8;
 	rate_info[NL80211_RATE_INFO_40_MHZ_WIDTH].type = NLA_FLAG;
@@ -274,19 +276,24 @@ static int wifi_hal_connection_info_hdlr(struct nl_msg *msg, void *arg)
 	}
 
 	if (sinfo[NL80211_STA_INFO_SIGNAL]) {
-		sc->signal = (unsigned char)nla_get_u8(sinfo[NL80211_STA_INFO_SIGNAL]);
+		for (int i=0; i < sc->radio_amount; i++) {
+			if (nl_ctx->ifindex[i] == (int)nla_get_u32(tb_msg[NL80211_ATTR_IFINDEX])) {
+				sc->signal[i] = (unsigned char) nla_get_u8(sinfo[NL80211_STA_INFO_SIGNAL]);
+			}
+		}
 	}
 
 	if (sinfo[NL80211_STA_INFO_TX_BITRATE])
 	{
-		if (nla_parse_nested(rinfo, NL80211_RATE_INFO_MAX,
-					sinfo[NL80211_STA_INFO_TX_BITRATE], rate_info))
-		{
+		if (nla_parse_nested(rinfo, NL80211_RATE_INFO_MAX, sinfo[NL80211_STA_INFO_TX_BITRATE], rate_info)) {
 			hal_err(HAL_DBG_WIFI, "failed to parse nested rate attributes!\n");
 		}
 		else {
-			if (rinfo[NL80211_RATE_INFO_BITRATE]) {
-				sc->txrate = nla_get_u16(rinfo[NL80211_RATE_INFO_BITRATE])/10;
+			for (int i=0; i < sc->radio_amount; i++) {
+				if ((nl_ctx->ifindex[i] == (int)nla_get_u32(tb_msg[NL80211_ATTR_IFINDEX])) &&
+						rinfo[NL80211_RATE_INFO_BITRATE]) {
+					sc->txrate[i] = nla_get_u16(rinfo[NL80211_RATE_INFO_BITRATE])/10;
+				}
 			}
 		}
 	}
@@ -299,8 +306,12 @@ static int wifi_hal_connection_info_hdlr(struct nl_msg *msg, void *arg)
 			hal_err(HAL_DBG_WIFI, "failed to parse nested rate attributes!\n");
 		}
 		else {
-			if (rinfo[NL80211_RATE_INFO_BITRATE]) {
-				sc->rxrate = nla_get_u16(rinfo[NL80211_RATE_INFO_BITRATE])/10;
+
+			for (int i=0; i < sc->radio_amount; i++) {
+				if ((nl_ctx->ifindex[i] == (int)nla_get_u32(tb_msg[NL80211_ATTR_IFINDEX])) &&
+					rinfo[NL80211_RATE_INFO_BITRATE]) {
+					sc->rxrate[i] = nla_get_u16(rinfo[NL80211_RATE_INFO_BITRATE])/10;
+				}
 			}
 		}
 	}
@@ -389,10 +400,10 @@ __attribute__((unused)) static int wifi_hal_switch_channel(struct netlink_ctx *n
 	NLA_PUT_U32(ch_sw_msg, NL80211_ATTR_WIPHY_CHANNEL_TYPE, htval);
 
 	nl_ctx->csa_cb_err = 1;
-	err = nl_send_auto(nl_ctx->sock, ch_sw_msg);
+	err = nl_send_auto((nl_sock *)(nl_ctx->sock), ch_sw_msg);
 	while (nl_ctx->csa_cb_err > 0)
 	{
-		nl_recvmsgs(nl_ctx->sock, nl_ctx->gen_nl_cb);
+		nl_recvmsgs((nl_sock *)nl_ctx->sock, nl_ctx->gen_nl_cb);
 	}
 	nlmsg_free(ch_sw_msg);
 
@@ -444,7 +455,7 @@ static void wifi_hal_nl80211_dettach(struct wifi_softc *sc)
 	nl_cb_put(nl_ctx->link_info_cb);
 }
 
-__attribute__((unused)) int wifi_hal_nl80211_tx_frame(struct netlink_ctx *nl_ctx, void *action_frame, size_t len)
+__attribute__((unused)) int wifi_hal_nl80211_tx_frame(struct netlink_ctx *nl_ctx, void *action_frame, size_t len, int index)
 {
 	char cmd = NL80211_CMD_FRAME;
 	struct nl_msg *nl_msg = nullptr;
@@ -467,7 +478,7 @@ __attribute__((unused)) int wifi_hal_nl80211_tx_frame(struct netlink_ctx *nl_ctx
 	}
 
 	genlmsg_put(nl_msg, 0, 0, nl_ctx->nl80211_id, 0, 0, cmd, 0);
-	NLA_PUT_U32(nl_msg, NL80211_ATTR_IFINDEX, nl_ctx->ifindex);
+	NLA_PUT_U32(nl_msg, NL80211_ATTR_IFINDEX, nl_ctx->ifindex[index]);
 	NLA_PUT(nl_msg, NL80211_ATTR_FRAME, len, action_frame);
 	NLA_PUT_FLAG(nl_msg, NL80211_ATTR_DONT_WAIT_FOR_ACK);
 	/* To Do: populate NL80211_ATTR_WIPHY_FREQ from mesh link*/
@@ -514,13 +525,13 @@ static int wifi_hal_get_interface(struct netlink_ctx *nl_ctx)
 	}
 	nlmsg_free(if_get_msg);
 
-	if (nl_ctx->ifindex < 0)
+	if (!nl_ctx->ifindex[WIFI_RADIO_0])
 		return -EINVAL;
 
 	return 0;
 }
 
-static int wifi_hal_get_stainfo(struct netlink_ctx *nl_ctx)
+static int wifi_hal_get_stainfo(struct netlink_ctx *nl_ctx, int index)
 {
 	struct nl_msg* sta_info_msg = nlmsg_alloc();
 	int err = 0;
@@ -539,7 +550,7 @@ static int wifi_hal_get_stainfo(struct netlink_ctx *nl_ctx)
 			0);
 
 	nl_ctx->linkinfo_cb_err = 1;
-	nla_put_u32(sta_info_msg, NL80211_ATTR_IFINDEX, nl_ctx->ifindex);
+	nla_put_u32(sta_info_msg, NL80211_ATTR_IFINDEX, nl_ctx->ifindex[index]);
 	err = nl_send_auto(nl_ctx->sock, sta_info_msg);
 	if (err<0) {
 		hal_err(HAL_DBG_WIFI, "nl_send_auto failed");
@@ -566,7 +577,7 @@ int wifi_hal_get_iface_name(struct radio_context *ctx, char *name, int radio_ind
 {
 	struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
 
-	memcpy(name, sc->nl_ctx.ifname, RADIO_IFNAME_SIZE);
+	memcpy(name, sc->nl_ctx.ifname[radio_index], RADIO_IFNAME_SIZE);
 
 	return 0;
 }
@@ -578,9 +589,9 @@ static int wifi_hal_get_txrate (struct radio_context *ctx, int radio_index)
 	struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
 
 	wifi_hal_get_interface(&sc->nl_ctx);
-	wifi_hal_get_stainfo(&sc->nl_ctx);
+	wifi_hal_get_stainfo(&sc->nl_ctx, radio_index);
 
-	return sc->txrate;
+	return sc->txrate[radio_index];
 }
 
 static int wifi_hal_get_rxrate (struct radio_context *ctx, int radio_index)
@@ -588,22 +599,21 @@ static int wifi_hal_get_rxrate (struct radio_context *ctx, int radio_index)
 	struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
 
 	wifi_hal_get_interface(&sc->nl_ctx);
-	wifi_hal_get_stainfo(&sc->nl_ctx);
+	wifi_hal_get_stainfo(&sc->nl_ctx, radio_index);
 
-	return sc->rxrate;
+	return sc->rxrate[radio_index];
 }
 
-static int wifi_hal_wpa_mesh_attach(struct wifi_softc *sc)
+static int wifi_hal_wpa_mesh_attach(struct wifi_softc *sc, int index)
 {
-	struct wpa_ctrl_ctx *ctx = &sc->wpa_ctx;
+	struct wpa_ctrl_ctx *ctx = &sc->wpa_ctx[index];
 	char sock_path[SOCKET_PATH_LENGTH] = {0};
 	int len = 0;
 
-	len += snprintf(sock_path, SOCKET_PATH_LENGTH, WIFI_HAL_WPA_SOCK_PATH);
-	/* To do: remove harcoded path */
-	len += snprintf(sock_path + len, SOCKET_PATH_LENGTH, (const char *)(MESH_NAME));
+	len += snprintf(sock_path, SOCKET_PATH_LENGTH, "%s", WIFI_HAL_WPA_SOCK_PATH);
+	snprintf(sock_path + len, SOCKET_PATH_LENGTH, "%s", (const char *)(sc->nl_ctx.ifname[index]));
 
-	ctx->mesh_ctrl = wpa_ctrl_open2(sock_path, client_socket_dir);
+	ctx->mesh_ctrl = wpa_ctrl_open2(sock_path, client_socket_dir[index]);
 	if (!ctx->mesh_ctrl) {
 		hal_err(HAL_DBG_WIFI, "Couldn't open '%s'\n", sock_path);
 		return -1;
@@ -612,9 +622,9 @@ static int wifi_hal_wpa_mesh_attach(struct wifi_softc *sc)
 	return 0;
 }
 
-static int wifi_hal_wpa_attach(struct wifi_softc *sc)
+static int wifi_hal_wpa_attach(struct wifi_softc *sc, int index)
 {
-	struct wpa_ctrl_ctx *ctx = &sc->wpa_ctx;
+	struct wpa_ctrl_ctx *ctx = &sc->wpa_ctx[index];
 	char sock_path[SOCKET_PATH_LENGTH] = {0};
 	int len = 0;
 
@@ -622,15 +632,15 @@ static int wifi_hal_wpa_attach(struct wifi_softc *sc)
 	ctx->mesh_ctrl = (wpa_ctrl *) nullptr;
 
 	len += snprintf(sock_path, SOCKET_PATH_LENGTH, WIFI_HAL_WPA_SOCK_PATH);
-	len += snprintf(sock_path + len, SOCKET_PATH_LENGTH, "%s", (const char *)(sc->nl_ctx.ifname));
-	ctx->ctrl = wpa_ctrl_open2(sock_path, client_socket_dir);
+	len += snprintf(sock_path + len, SOCKET_PATH_LENGTH, "%s", (const char *)(sc->nl_ctx.ifname[index]));
+	ctx->ctrl = wpa_ctrl_open2(sock_path, client_socket_dir[index]);
 	if (!ctx->ctrl) {
 		hal_err(HAL_DBG_WIFI, "Couldn't open '%s'\n", sock_path);
 		return -1;
 	}
 	ctx->fd = wpa_ctrl_get_fd(ctx->ctrl);
 
-	ctx->monitor = wpa_ctrl_open2(sock_path, client_socket_dir);
+	ctx->monitor = wpa_ctrl_open2(sock_path, client_socket_dir[index]);
 	if (!ctx->monitor) {
 		hal_err(HAL_DBG_WIFI, "Couldn't open '%s'\n", sock_path);
 		wpa_ctrl_close(ctx->ctrl);
@@ -647,9 +657,9 @@ static int wifi_hal_wpa_attach(struct wifi_softc *sc)
 	return 0;
 }
 
-static void wifi_hal_wpa_dettach(struct wifi_softc *sc)
+static void wifi_hal_wpa_dettach(struct wifi_softc *sc, int index)
 {
-	struct wpa_ctrl_ctx *ctx = &sc->wpa_ctx;
+	struct wpa_ctrl_ctx *ctx = &sc->wpa_ctx[index];
 
 	wpa_ctrl_close(ctx->monitor);
 	wpa_ctrl_close(ctx->ctrl);
@@ -714,20 +724,22 @@ static int wifi_hal_start_wpa_dummy_config(struct radio_context *ctx, int radio_
 		hal_warn(HAL_DBG_WIFI, "failed to pkill wpa_supplicant\n");
 	}
 
-	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "rm /var/run/wpa_supplicant/%s 2>/dev/null", sc->nl_ctx.ifname);
-	ret = wifi_hal_run_sys_cmd(cmd_buf, resp_buf, len);
-	if (ret) {
-		hal_warn(HAL_DBG_WIFI, "failed to delete default ctrl interface\n");
-	}
+	for (int i=0; i < sc->radio_amount; i++) {
 
-	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf),
-					(const char*) "wpa_supplicant -dd -Dnl80211 -B -i%s -c%s -f /tmp/wpa_default.log ", sc->nl_ctx.ifname,
-					WPA_SUPPLICANT_DEFAULT_CONFIG);
-	ret = system(cmd_buf);
-    //sleep(5);
-	if (ret) {
-		hal_err(HAL_DBG_WIFI, "failed to start supplicant with default conf\n");
-		return -1;
+		prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "rm /var/run/wpa_supplicant/%s 2>/dev/null", sc->nl_ctx.ifname[i]);
+		ret = wifi_hal_run_sys_cmd(cmd_buf, resp_buf, len);
+		if (ret) {
+			hal_warn(HAL_DBG_WIFI, "failed to delete default ctrl interface\n");
+		}
+
+		prepare_cmd_buf(cmd_buf, sizeof(cmd_buf),
+						(const char*) "wpa_supplicant -dd -Dnl80211 -B -i%s -c%s -f /tmp/wpa_default.log ", sc->nl_ctx.ifname[i], WPA_SUPPLICANT_DEFAULT_CONFIG);
+
+		ret = system(cmd_buf);
+		if (ret) {
+			hal_err(HAL_DBG_WIFI, "failed to start supplicant with default conf\n");
+			return -1;
+		}
 	}
 	return ret;
 }
@@ -735,42 +747,23 @@ static int wifi_hal_start_wpa_dummy_config(struct radio_context *ctx, int radio_
 static int wifi_hal_open(struct radio_context *ctx, enum radio_type type)
 {
 	struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
-	char cmd_buf[CMD_BUFFER_SIZE] = {0};
-	char resp_buf[RESP_BUFFER_SIZE] = {0};
-	int err = 0, ret = 0, len = sizeof(cmd_buf)-1;
+	int err = 0, ret = 0;
 
 	err = wifi_hal_get_interface(&sc->nl_ctx);
+	if (err<0) {
+		hal_err(HAL_DBG_WIFI, "no wifi device");
+		return -1;
+	}
 
-	ret = wifi_hal_get_phyname(sc, cmd_buf, resp_buf, sizeof(resp_buf));
+	ret = wifi_hal_get_phyname(sc);
 	if (ret<0) {
 		hal_err(HAL_DBG_WIFI, "failed to get phy");
 		return -1;
-	} else {
-		if (strlen(resp_buf) < sizeof(sc->nl_ctx.phyname) - 1)
-			strncpy(sc->nl_ctx.phyname, resp_buf, sizeof(sc->nl_ctx.phyname));
-		else
-			return -1;
-		hal_info(HAL_DBG_WIFI, "phy_name: phy%s\n", sc->nl_ctx.phyname);
 	}
 
-	/* wifi interface name handling TODO for multiple wifi */
-	if (!err && !(int)sc->nl_ctx.ifname[0]) {
-		prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "iw phy phy%s interface add wlp1s0 type managed",
-						sc->nl_ctx.phyname);
-		ret = wifi_hal_run_sys_cmd(cmd_buf, resp_buf, len);
-		if (ret) {
-			hal_err(HAL_DBG_WIFI, "failed to add wlp1s0\n");
-			return -1;
-		}
+	for (int i = 0; i < sc->radio_amount; i++) {
+		hal_info(HAL_DBG_WIFI, "wifi(%d) interface: %s , interface index = %d\n", i, sc->nl_ctx.ifname[i], sc->nl_ctx.ifindex[i]);
 	}
-
-	err = wifi_hal_get_interface(&sc->nl_ctx);
-	if (err){
-		hal_err(HAL_DBG_WIFI, "failed to get interface\n");
-		return err;
-	}
-
-	hal_info(HAL_DBG_WIFI, "wifi interface: %s , interface index = %d\n", sc->nl_ctx.ifname, sc->nl_ctx.ifindex);
 
 	err = wifi_hal_start_wpa_dummy_config(ctx, type);
 	if (err) {
@@ -778,25 +771,25 @@ static int wifi_hal_open(struct radio_context *ctx, enum radio_type type)
 		hal_info(HAL_DBG_WIFI, "wifi hal default supplicant start failed\n");
 	}
 
-	err = wifi_hal_wpa_attach(sc);
-	if (err) {
-		hal_err(HAL_DBG_WIFI, "wpa_attach failed \n");
-		return err;
+	for (int i = 0; i < sc->radio_amount; i++) {
+		err = wifi_hal_wpa_attach(sc, i);
+		if (err) {
+			hal_err(HAL_DBG_WIFI, "wpa_attach failed \n");
+			return err;
+		}
 	}
-
-	wifi_debugfs_init(sc);
 
 	return 0;
 }
 
-static int wifi_hal_close(struct radio_context *ctx, enum radio_type type)
-{
-	struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
+static int wifi_hal_close(struct radio_context *ctx, enum radio_type type) {
+	struct wifi_softc *sc = (struct wifi_softc *) ctx->radio_private;
 
-	wifi_hal_wpa_dettach(sc);
-
-	memset(sc->nl_ctx.ifname, 0,  RADIO_IFNAME_SIZE);
-	sc->nl_ctx.ifindex = 0;
+	for (int i = 0; i < sc->radio_amount; i++) {
+		wifi_hal_wpa_dettach(sc, i);
+		memset(sc->nl_ctx.ifname[i], 0, RADIO_IFNAME_SIZE);
+		sc->nl_ctx.ifindex[i] = -1;
+	}
 
 	return 0;
 }
@@ -805,7 +798,7 @@ static int wifi_hal_get_mac_addr(struct radio_context *ctx, char *mac_addr, int 
 {
 	struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
 
-	get_mac_addr(sc, mac_addr);
+	get_mac_addr(sc, mac_addr, radio_index);
 	return 0;
 }
 
@@ -813,12 +806,12 @@ static int wifi_hal_send_wpa_command(struct wpa_ctrl_ctx *ctx, int index, const 
 {
 	int ret;
 
-	if (!ctx->ctrl) {
+	if (!ctx[index].monitor) {
 		hal_err(HAL_DBG_WIFI, "ctrl socket not connected '%s' and cmd drooped:%s\n", WIFI_HAL_WPA_SOCK_PATH, cmd);
 		return -1;
 	}
 
-	ret = wpa_ctrl_request(ctx->ctrl, cmd, strlen(cmd), resp, resp_size, nullptr);
+	ret = wpa_ctrl_request(ctx[index].ctrl, cmd, strlen(cmd), resp, resp_size, nullptr);
 	if (ret == -2) {
 		hal_err(HAL_DBG_WIFI, "'%s' command timed out.\n", cmd);
 		return -2;
@@ -840,12 +833,12 @@ static int wifi_hal_send_wpa_mesh_command(struct wpa_ctrl_ctx *ctx, int index, c
 {
 	int ret;
 
-	if (!ctx->mesh_ctrl) {
+	if (!ctx[index].mesh_ctrl) {
 		hal_err(HAL_DBG_WIFI, "ctrl socket not connected '%s' and cmd dropped:%s\n", WIFI_HAL_WPA_SOCK_PATH, cmd);
 		return -1;
 	}
 
-	ret = wpa_ctrl_request(ctx->mesh_ctrl, cmd, strlen(cmd), resp, (size_t *)resp_size, nullptr);
+	ret = wpa_ctrl_request(ctx[index].mesh_ctrl, cmd, strlen(cmd), resp, (size_t *)resp_size, nullptr);
 	if (ret == -2) {
 		hal_err(HAL_DBG_WIFI, "'%s' command timed out.\n", cmd);
 		return -2;
@@ -863,28 +856,28 @@ static int wifi_hal_send_wpa_mesh_command(struct wpa_ctrl_ctx *ctx, int index, c
 	return 0;
 }
 
-static int wifi_hal_trigger_scan(struct wifi_softc *sc)
+static int wifi_hal_trigger_scan(struct wifi_softc *sc, int index)
 {
 	char buf[CMD_BUFFER_SIZE];
 	size_t len = 0;
 
 	len = sizeof(buf) - 1;
-	wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, "SCAN", buf, &len);
+	wifi_hal_send_wpa_command(sc->wpa_ctx, index, "SCAN", buf, &len);
 	if (len)
 		hal_info(HAL_DBG_WIFI, "SCAN TRIGGER:%s\n", buf);
 
 	return 0;
 }
 
-static int wifi_hal_get_scan_results(struct radio_context *ctx, char *results)
+static int wifi_hal_get_scan_results(struct radio_context *ctx, char *results, int index)
 {
 	struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
 	char buf[4096];
 	size_t len = 0;
 
 	len = sizeof(buf) - 1;
-	wifi_hal_trigger_scan(sc);
-	wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, "SCAN_RESULTS", buf, &len);
+	wifi_hal_trigger_scan(sc, index);
+	wifi_hal_send_wpa_command(sc->wpa_ctx, index, "SCAN_RESULTS", buf, &len);
 	if (len && debug)
 		hal_info(HAL_DBG_WIFI, "SCAN RESULTS:%s\n", buf);
 
@@ -893,10 +886,10 @@ static int wifi_hal_get_scan_results(struct radio_context *ctx, char *results)
 	return 0;
 }
 
-static int wifi_hal_connect_ap(struct radio_context *ctx)
+static int wifi_hal_connect_ap(struct radio_context *ctx, int index)
 {
 	struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
-	struct wifi_config *config = (struct wifi_config *)ctx->config;
+	struct wifi_config *config = (struct wifi_config *)ctx->config[index];
 	char cmd_buf[CMD_BUFFER_SIZE] = {0};
 	char resp_buf[RESP_BUFFER_SIZE] = {0};
 	char nw_id[6] = {0};
@@ -904,14 +897,14 @@ static int wifi_hal_connect_ap(struct radio_context *ctx)
 	int ret = 0;
 
 	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "REMOVE_NETWORK all");
-	ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
+	ret = wifi_hal_send_wpa_command(sc->wpa_ctx, index, cmd_buf, resp_buf, &len);
 	if (ret < 0) {
 		hal_err(HAL_DBG_WIFI, "Fail to remove existing NW\n");
 		return ret;
 	}
 
 	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "ADD_NETWORK");
-	ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
+	ret = wifi_hal_send_wpa_command(sc->wpa_ctx, index, cmd_buf, resp_buf, &len);
 	if (ret < 0) {
         hal_err(HAL_DBG_WIFI, "Fail to add NW\n");
         return ret;
@@ -928,16 +921,16 @@ static int wifi_hal_connect_ap(struct radio_context *ctx)
 	}
 
 	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "%s%s%s\"%s\"", "SET_NETWORK ", nw_id, " ssid ", config->ssid);
-	ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
+	ret = wifi_hal_send_wpa_command(sc->wpa_ctx, index, cmd_buf, resp_buf, &len);
 	if (ret || strncmp(resp_buf, "OK", 2) != 0) {
 		hal_err(HAL_DBG_WIFI, "Fail to set ssid\n");
 		return ret;
 	} else {
 		prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "%s%s%s\"%s\"", "SET_NETWORK ", nw_id, " psk ", config->key);
-		wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
+		wifi_hal_send_wpa_command(sc->wpa_ctx, index, cmd_buf, resp_buf, &len);
 		if (strncmp(resp_buf, "OK", 2) == 0) {
 			prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "%s%s", "ENABLE_NETWORK ", nw_id);
-			wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
+			wifi_hal_send_wpa_command(sc->wpa_ctx, index, cmd_buf, resp_buf, &len);
 		} else {
 			hal_err(HAL_DBG_WIFI, "failed to enable network\n");
 			return -1;
@@ -947,10 +940,10 @@ static int wifi_hal_connect_ap(struct radio_context *ctx)
 	return 0;
 }
 
-static int wifi_hal_create_ap(struct radio_context *ctx)
+static int wifi_hal_create_ap(struct radio_context *ctx, int index)
 {
 	struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
-	struct wifi_config *config = (struct wifi_config *)ctx->config;
+	struct wifi_config *config = (struct wifi_config *)ctx->config[index];
 	char cmd_buf[CMD_BUFFER_SIZE] = {0};
 	char resp_buf[RESP_BUFFER_SIZE] = {0};
 	char nw_id[6] = {0};
@@ -959,14 +952,14 @@ static int wifi_hal_create_ap(struct radio_context *ctx)
 
 
 	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "REMOVE_NETWORK all");
-	ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
+	ret = wifi_hal_send_wpa_command(sc->wpa_ctx, index, cmd_buf, resp_buf, &len);
 	if (ret < 0) {
 		hal_err(HAL_DBG_WIFI, "Fail to remove existing NW\n");
 		return ret;
 	}
 
 	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "ADD_NETWORK");
-	ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
+	ret = wifi_hal_send_wpa_command(sc->wpa_ctx, index, cmd_buf, resp_buf, &len);
 	if (ret < 0) {
 		hal_err(HAL_DBG_WIFI, "Fail to add NW\n");
 		return ret;
@@ -983,42 +976,42 @@ static int wifi_hal_create_ap(struct radio_context *ctx)
 	}
 
 	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "SET_NETWORK %s mode 2", nw_id);
-	ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
+	ret = wifi_hal_send_wpa_command(sc->wpa_ctx, index, cmd_buf, resp_buf, &len);
 	if (ret || strncmp(resp_buf, "OK", 2) != 0) {
 		hal_err(HAL_DBG_WIFI, "failed to set mesh mode\n");
 		return -1;
 	}
 
 	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "SET_NETWORK %s ssid \"%s\"", nw_id, config->ssid);
-	ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
+	ret = wifi_hal_send_wpa_command(sc->wpa_ctx, index, cmd_buf, resp_buf, &len);
 	if (ret || strncmp(resp_buf, "OK", 2) != 0) {
 		hal_err(HAL_DBG_WIFI, "failed to set mesh ssid\n");
 		return -1;
 	}
 
 	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "SET_NETWORK %s frequency %s", nw_id, config->freq);
-	ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
+	ret = wifi_hal_send_wpa_command(sc->wpa_ctx, index, cmd_buf, resp_buf, &len);
 	if (ret || strncmp(resp_buf, "OK", 2) != 0) {
 		hal_err(HAL_DBG_WIFI, "failed to set mesh freq\n");
 		return -1;
 	}
 
 	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "SET_NETWORK %s key_mgmt WPA-PSK", nw_id);
-	ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
+	ret = wifi_hal_send_wpa_command(sc->wpa_ctx, index, cmd_buf, resp_buf, &len);
 	if (ret || strncmp(resp_buf, "OK", 2) != 0) {
 		hal_err(HAL_DBG_WIFI, "failed to set mesh key mgmt\n");
 		return -1;
 	}
 
 	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "SET_NETWORK %s psk \"%s\"", nw_id, config->key);
-	ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
+	ret = wifi_hal_send_wpa_command(sc->wpa_ctx, index, cmd_buf, resp_buf, &len);
 	if (ret || strncmp(resp_buf, "OK", 2) != 0) {
 		hal_err(HAL_DBG_WIFI, "failed to set mesh psk\n");
 		return -1;
 	}
 
 	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "ENABLE_NETWORK %s", nw_id);
-	ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
+	ret = wifi_hal_send_wpa_command(sc->wpa_ctx, index, cmd_buf, resp_buf, &len);
 
 	if (ret || strncmp(resp_buf, "OK", 2) != 0) {
 			hal_err(HAL_DBG_WIFI, "failed to enable network\n");
@@ -1028,10 +1021,10 @@ static int wifi_hal_create_ap(struct radio_context *ctx)
 	return 0;
 }
 
-static int wifi_hal_join_mesh(struct radio_context *ctx)
+static int wifi_hal_join_mesh(struct radio_context *ctx, int index)
 {
 	struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
-	struct wifi_config *config = (struct wifi_config *)ctx->config;
+	struct wifi_config *config = (struct wifi_config *)ctx->config[index];
 	char cmd_buf[CMD_BUFFER_SIZE] = {0};
 	char resp_buf[RESP_BUFFER_SIZE] = {0};
 	char nw_id[6] = {0};
@@ -1041,30 +1034,21 @@ static int wifi_hal_join_mesh(struct radio_context *ctx)
     hal_info(HAL_DBG_WIFI, "wifi_hal_join_mesh\n");
 
 	/* To do: Back up  AP config and Add support for SAP + MESH later */
-
-#if 0
-	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "MESH_INTERFACE_ADD ifname=%s",MESH_NAME);
-	ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
-	if (ret || strncmp(resp_buf, MESH_NAME, 2) != 0) {
-		hal_err(HAL_DBG_WIFI, "failed to add mesh interface\n");
-		return -1;
-	}
-#endif
-    ret = wifi_hal_wpa_mesh_attach(sc);
+    ret = wifi_hal_wpa_mesh_attach(sc, index);
 	if (ret) {
 		hal_err(HAL_DBG_WIFI, "wpa_supplicant mesh attach failed\n");
 		return -1;
 	}
 
 	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "REMOVE_NETWORK all");
-	ret = wifi_hal_send_wpa_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, (size_t *)&len);
+	ret = wifi_hal_send_wpa_command(sc->wpa_ctx, index, cmd_buf, resp_buf, (size_t *)&len);
 	if (ret < 0) {
 		/* To Do: remove this once concurrency supported */
 		hal_warn(HAL_DBG_WIFI, "Fail to remove existing NW\n");
 	}
 
 	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "ADD_NETWORK");
-	ret = wifi_hal_send_wpa_mesh_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
+	ret = wifi_hal_send_wpa_mesh_command(sc->wpa_ctx, index, cmd_buf, resp_buf, &len);
 	if (ret < 0) {
 		hal_err(HAL_DBG_WIFI, "mesh add network failed\n");
 		return -1;
@@ -1081,42 +1065,42 @@ static int wifi_hal_join_mesh(struct radio_context *ctx)
 	}
 
 	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "SET_NETWORK %s mode 5", nw_id);
-	ret = wifi_hal_send_wpa_mesh_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
+	ret = wifi_hal_send_wpa_mesh_command(sc->wpa_ctx, index, cmd_buf, resp_buf, &len);
 	if (ret || strncmp(resp_buf, "OK", 2) != 0) {
 		hal_err(HAL_DBG_WIFI, "failed to set mesh mode\n");
 		return -1;
 	}
 
 	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "SET_NETWORK %s ssid \"%s\"", nw_id, config->ssid);
-	ret = wifi_hal_send_wpa_mesh_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
+	ret = wifi_hal_send_wpa_mesh_command(sc->wpa_ctx, index, cmd_buf, resp_buf, &len);
 	if (ret || strncmp(resp_buf, "OK", 2) != 0) {
 		hal_err(HAL_DBG_WIFI, "failed to set mesh ssid\n");
 		return -1;
 	}
 
 	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "SET_NETWORK %s frequency %s", nw_id, config->freq);
-	ret = wifi_hal_send_wpa_mesh_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
+	ret = wifi_hal_send_wpa_mesh_command(sc->wpa_ctx, index, cmd_buf, resp_buf, &len);
 	if (ret || strncmp(resp_buf, "OK", 2) != 0) {
 		hal_err(HAL_DBG_WIFI, "failed to set mesh freq\n");
 		return -1;
 	}
 
 	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "SET_NETWORK %s key_mgmt SAE", nw_id);
-	ret = wifi_hal_send_wpa_mesh_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
+	ret = wifi_hal_send_wpa_mesh_command(sc->wpa_ctx, index, cmd_buf, resp_buf, &len);
 	if (ret || strncmp(resp_buf, "OK", 2) != 0) {
 		hal_err(HAL_DBG_WIFI, "failed to set mesh key mgmt\n");
 		return -1;
 	}
 
 	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "SET_NETWORK %s psk \"%s\"", nw_id, config->key);
-	ret = wifi_hal_send_wpa_mesh_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
+	ret = wifi_hal_send_wpa_mesh_command(sc->wpa_ctx, index, cmd_buf, resp_buf, &len);
 	if (ret || strncmp(resp_buf, "OK", 2) != 0) {
 		hal_err(HAL_DBG_WIFI, "failed to set mesh psk\n");
 		return -1;
 	}
 
 	prepare_cmd_buf(cmd_buf, sizeof(cmd_buf), (const char*) "MESH_GROUP_ADD %s", nw_id);
-	ret = wifi_hal_send_wpa_mesh_command(&sc->wpa_ctx, 0, cmd_buf, resp_buf, &len);
+	ret = wifi_hal_send_wpa_mesh_command(sc->wpa_ctx, index, cmd_buf, resp_buf, &len);
 	if (ret || strncmp(resp_buf, "OK", 2) != 0) {
 		hal_err(HAL_DBG_WIFI, "failed to enable mesh\n");
 		return -1;
@@ -1137,56 +1121,67 @@ int wifi_hal_get_fw_stats(struct radio_context *ctx, char *buf, int buf_size, in
 	return 0;
 }
 
-static int wifi_hal_ctrl_recv(struct wpa_ctrl_ctx *ctx, int index, char *reply, size_t *reply_len)
+static int wifi_hal_ctrl_recv(struct wifi_softc *sc, int index, char *reply, size_t *reply_len)
 {
-	int res;
-	struct pollfd fds[2];
+	struct wpa_ctrl_ctx *ctx = (wpa_ctrl_ctx *)sc->wpa_ctx;
+	int res, i;
+	struct pollfd fds[WIFI_RADIO_MAX+1];
 	int wpa_fd;
 
-	if (!ctx->ctrl) {
-		hal_err(HAL_DBG_WIFI, "ctrl socket not opened '%s'\n", WIFI_HAL_WPA_SOCK_PATH);
-		return -1;
+	for (i=0; i < WIFI_RADIO_MAX; i++) {
+		if (!ctx[i].ctrl) {
+			hal_err(HAL_DBG_WIFI, "ctrl socket not opened '%s'\n", WIFI_HAL_WPA_SOCK_PATH);
+			return -1;
+		}
 	}
 
-	wpa_fd = wpa_ctrl_get_fd(ctx->monitor);
-	memset(fds, 0, 2 * sizeof(struct pollfd));
+	memset(fds, 0, (WIFI_RADIO_MAX+1) * sizeof(struct pollfd));
 	fds[0].fd = STDIN_FILENO;
 	fds[0].events |= POLLIN;
 	fds[0].revents = 0;
-	fds[1].fd = wpa_fd;
-	fds[1].events |= POLLIN;
-	fds[1].revents = 0;
-	res = poll(fds, 2, -1);
+
+	for (i=1; i < WIFI_RADIO_MAX+1; i++) {
+		wpa_fd = wpa_ctrl_get_fd(ctx[i-1].monitor);
+		fds[i].fd = wpa_fd;
+		fds[i].events |= POLLIN;
+		fds[i].revents = 0;
+	}
+
+	res = poll(fds, sc->radio_amount+1, -1);
 	if (res < 0) {
 		hal_err(HAL_DBG_WIFI, "poll failed = %d", res);
 		return res;
 	}
 
-	if (wpa_ctrl_pending(ctx->monitor)>0) {
-		return wpa_ctrl_recv(ctx->monitor, reply, reply_len);
-	} else {
-		hal_err(HAL_DBG_WIFI, "socket terminated already!\n");
-		return -1;
+	for (i=0; i < sc->radio_amount; i++) {
+		if (wpa_ctrl_pending(ctx[i].monitor)>0) {
+			hal_info(HAL_DBG_WIFI, "--- wpa_socket receive %d - %s ---\n", i, sc->nl_ctx.ifname[i]);
+			res = wpa_ctrl_recv(ctx[i].monitor, reply, reply_len);
+			return res;
+		}
 	}
 
-    return 0;
+	hal_err(HAL_DBG_WIFI, "sockets terminated already!\n");
+	return -1;
 }
 
-static int wifi_hal_wait_on_event(struct wpa_ctrl_ctx *ctx, int index, char *buf, size_t buflen)
+static int wifi_hal_wait_on_event(struct wifi_softc *sc, int index, char *buf, size_t buflen)
 {
+	struct wpa_ctrl_ctx *ctx = (wpa_ctrl_ctx *)sc->wpa_ctx;
 	size_t nread = buflen - 1;
-	int result;
+	int result, i;
 
-	if (!ctx->monitor)
-	{
-		hal_err(HAL_DBG_WIFI, "monitor Connection not opened\n");
-		strncpy(buf, WPA_EVENT_TERMINATING " - connection closed", buflen-1);
-		buf[buflen-1] = '\0';
-		return (int)strlen(buf);
+	for (i=0; i < WIFI_RADIO_MAX; i++) {
+		if (!ctx[i].monitor) {
+			hal_err(HAL_DBG_WIFI, "monitor Connection not opened\n");
+			strncpy(buf, WPA_EVENT_TERMINATING " - connection closed", buflen - 1);
+			buf[buflen - 1] = '\0';
+			return (int) strlen(buf);
+		}
 	}
 
 	/* To DO: Pass valid index during concurency */
-	result = wifi_hal_ctrl_recv(ctx, 0, buf, &nread);
+	result = wifi_hal_ctrl_recv(sc, index, buf, &nread);
 	if (result < 0) {
 		hal_err(HAL_DBG_WIFI, "wifi_ctrl_recv failed: %s\n", strerror(errno));
 		strncpy(buf, WPA_EVENT_TERMINATING " - recv error\n", buflen-1);
@@ -1290,7 +1285,7 @@ static wifi_SystemEvent wifi_hal_map_wpa_event_to_state(char *event, int len) {
     return NO_EVENT;
 }
 
-static wifi_state connected_handler(struct radio_context *ctx) {
+static wifi_state connected_handler(struct radio_context *ctx, int index) {
     struct radio_generic_func *radio_ops;
     radio_ops = ctx->cmn.rd_func;
 
@@ -1298,7 +1293,7 @@ static wifi_state connected_handler(struct radio_context *ctx) {
     return CONNECTED_STATE;
 }
 
-static wifi_state disconnected_handler(struct radio_context *ctx) {
+static wifi_state disconnected_handler(struct radio_context *ctx, int index) {
 	struct radio_generic_func *radio_ops;
 	char scan_results[4096] = {0};
 
@@ -1306,38 +1301,42 @@ static wifi_state disconnected_handler(struct radio_context *ctx) {
 
 	/* for test purposes */
 	hal_info(HAL_DBG_WIFI, "RSSI:%d dbm\n", (int8_t)radio_ops->radio_get_rssi(ctx, 1));
-	radio_ops->radio_get_scan_results(ctx, scan_results);
+	radio_ops->radio_get_scan_results(ctx, scan_results, index);
 	hal_info(HAL_DBG_WIFI, "SCAN RESULTS %s\n", scan_results);
 
     return DISCONNECTED_STATE;
 }
 
-static wifi_state init_handler(struct radio_context *ctx) {
+static wifi_state init_handler(struct radio_context *ctx, int index) {
 	struct radio_generic_func *radio_ops;
-	char ifname[RADIO_IFNAME_SIZE] = {0};
+	struct wifi_config *config;
+	struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
 
-	struct wifi_config *config = (struct wifi_config *)ctx->config;
-
+	config = (struct wifi_config *)ctx->config[index];
 	radio_ops = ctx->cmn.rd_func;
-	radio_ops->radio_get_iface_name(ctx, ifname, 1);
 
+    /* TODO This content is for test purposes */
 	if (strncmp(config->mode, "ap", 2) == 0) {
-		radio_ops->radio_create_ap(ctx);
+		radio_ops->radio_create_ap(ctx, index);
 	} else 	if (strncmp(config->mode, "sta", 3) == 0) {
-		radio_ops->radio_connect_ap(ctx);
+		radio_ops->radio_connect_ap(ctx, index);
 	} else if (strncmp(config->mode, "mesh", 4) == 0) {
-		radio_ops->radio_join_mesh(ctx);
+		radio_ops->radio_join_mesh(ctx, index);
 	} else {
 		return UNKNOWN_STATE;
 	}
+
+	/* to get all wifi radios initialised */
+	if (index < sc->radio_amount-1)
+		return INIT_STATE;
 
 	return IF_UP_STATE;
 }
 
 //wifi state machine definition TODO
 static wifi_StateMachine wifi_asStateMachine[] =
-{       // from                  // event trigger        // event handler
-	{INIT_STATE,         STARTUP_EVENT,      init_handler},
+{    // from          // event trigger    // event handler
+    {INIT_STATE,         STARTUP_EVENT,      init_handler},
     {DISCONNECTED_STATE, CONNECTED_EVENT,    disconnected_handler},
     {CONNECTED_STATE,    DISCONNECTED_EVENT, connected_handler},
 	{UNKNOWN_STATE,      NO_EVENT,           nullptr} // Don't remove this line
@@ -1352,6 +1351,8 @@ static void wifi_events(struct radio_context *ctx)
 	bool loop = true;
 	wifi_SystemEvent eNewEvent;
 
+	int index = -1; // TODO used for initialisation loop
+
 	sc->state = INIT_STATE;
 	eNewEvent = STARTUP_EVENT;
 
@@ -1359,8 +1360,11 @@ static void wifi_events(struct radio_context *ctx)
 		hal_info(HAL_DBG_WIFI, "EventState: %d\n", sc->state);
 		if (sc->state != INIT_STATE) {
 			// read next events
-			nread = wifi_hal_wait_on_event(&sc->wpa_ctx, 0, resp_buf, len);
+			nread = wifi_hal_wait_on_event(sc, index, resp_buf, len);
 			eNewEvent = wifi_hal_map_wpa_event_to_state(resp_buf, nread);
+		} else {
+			index++;
+			eNewEvent = STARTUP_EVENT;
 		}
 
         if (eNewEvent == NO_EVENT) {
@@ -1377,8 +1381,9 @@ static void wifi_events(struct radio_context *ctx)
 				}
 				i++;
 			}
-			if (wifi_asStateMachine[i].StateMachineEventHandler != nullptr)
-				sc->state = (*wifi_asStateMachine[i].StateMachineEventHandler)(ctx);
+			if (wifi_asStateMachine[i].StateMachineEventHandler != nullptr) {
+				sc->state = (*wifi_asStateMachine[i].StateMachineEventHandler)(ctx, index);
+			}
 			else
 				hal_warn(HAL_DBG_WIFI, "Not defined state state!!  event=%d\n", eNewEvent);
 		} else {
@@ -1393,9 +1398,9 @@ static int wifi_hal_get_rssi (struct radio_context *ctx, int radio_index)
 	struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
 
 	wifi_hal_get_interface(&sc->nl_ctx);
-	wifi_hal_get_stainfo(&sc->nl_ctx);
+	wifi_hal_get_stainfo(&sc->nl_ctx, radio_index);
 
-	return sc->signal;
+	return sc->signal[radio_index];
 }
 
 static struct radio_generic_func wifi_hal_ops = {
@@ -1424,7 +1429,6 @@ static struct radio_generic_func wifi_hal_ops = {
 	.radio_create_ap = wifi_hal_create_ap,
 	.radio_join_mesh = wifi_hal_join_mesh,
 	.radio_connect = nullptr, //modem interface
-	.radio_get_fw_stats = wifi_hal_get_fw_stats,
 };
 
 __attribute__((unused)) int wifi_hal_register_ops(struct radio_context *ctx)
@@ -1451,6 +1455,12 @@ struct radio_context*  wifi_hal_attach()
 		err =  -ENOMEM;
 		goto sc_alloc_failure;
 	}
+
+	for (int i = 0; i < WIFI_RADIO_MAX; i++) {
+		sc->nl_ctx.ifname[i][0] = '\0';
+		sc->nl_ctx.ifindex[i] = -1;
+	}
+	sc->radio_amount = 0;
 
 	ctx->radio_private = (void*)sc;
 	err = wifi_hal_nl80211_attach(sc);
@@ -1488,7 +1498,7 @@ int wifi_hal_dettach(struct radio_context *ctx)
 	free(ctx->config);
 	free(ctx);
 
-	hal_info(HAL_DBG_WIFI, "WiFi HAL dettach completed\n");
+	hal_info(HAL_DBG_WIFI, "WiFi HAL detach completed\n");
 	return 0;
 }
 

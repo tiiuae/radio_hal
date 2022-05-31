@@ -20,8 +20,12 @@ fi
 
 mesh_activation()
 {
-#	radio_manager -w $1 &
-	echo "start in separate shell: radio_manager -w wifi_example.yaml"
+	# old way:
+	# radio_manager -w $1
+	echo "start in separate shell:"
+	echo "   radio_manager -w wifi_example_0.yaml"
+	echo "     or"
+	echo "   radio_manager -w \"wifi_example_0.yaml wifi_example_1.xml\""
 	sleep 5
 	echo "bat0 up.."
 	batctl if add mesh0
@@ -47,16 +51,18 @@ mesh_activation()
 
 modem_activation()
 {
-  #radio_manager -m $1
-  echo "start in separate shell: radio_manager -m modem_example.yaml"
-  sleep 5
-  ### get cdc-wdm device ####
-  device=$(basename -- "$(echo /sys/class/usbmisc/cdc*)")
+	# old way:
+	# radio_manager -m $1
+	echo "start in separate shell:"
+	echo "   radio_manager -m modem_example.yaml"
+	sleep 5
+	### get cdc-wdm device ####
+	device=$(basename -- "$(echo /sys/class/usbmisc/cdc*)")
 
-  ### get wwan name ###
-  wwan=$(qmicli --device=/dev/"$device" --get-wwan-iface)
+	### get wwan name ###
+	wwan=$(qmicli --device=/dev/"$device" --get-wwan-iface)
 
-  udhcpc -q -f -n -i "$wwan"
+	udhcpc -q -f -n -i "$wwan"
 }
 
 off()
