@@ -37,7 +37,7 @@ enum wifi_driver_version {
 };
 
 //typedef of function pointer
-typedef wifi_state (*wifiEventHandler)(struct radio_context *ctx);
+typedef wifi_state (*wifiEventHandler)(struct radio_context *ctx, int index);
 
 //structure of state and event with event handler
 typedef struct {
@@ -55,9 +55,9 @@ enum radio {
 struct netlink_ctx {
 	struct nl_sock *sock;
 	int nl80211_id;
-	int ifindex;
-	char ifname[RADIO_IFNAME_SIZE];
-	char phyname[RADIO_PHYNAME_SIZE];
+	int ifindex[WIFI_RADIO_MAX];
+	char ifname[WIFI_RADIO_MAX][RADIO_IFNAME_SIZE];
+	char phyname[WIFI_RADIO_MAX][RADIO_PHYNAME_SIZE];
 	char debugfs_root[RADIO_DEBUGFS_DIRSIZE];
 	struct nl_cb *if_cb;
 	struct nl_cb *link_info_cb;
@@ -76,17 +76,18 @@ struct wpa_ctrl_ctx {
 };
 
 struct wifi_softc {
-	char mac_addr[RADIO_MACADDR_SIZE];
+	char mac_addr[WIFI_RADIO_MAX][RADIO_MACADDR_SIZE];
 	struct netlink_ctx nl_ctx;
-	struct wpa_ctrl_ctx wpa_ctx;
-	int signal;
-	int txrate;
-	int rxrate;
-	int rssi;
-	int avg_rssi;
-	int channel;
-	int mcs;
+	struct wpa_ctrl_ctx wpa_ctx[WIFI_RADIO_MAX];
+	int signal[WIFI_RADIO_MAX];
+	int txrate[WIFI_RADIO_MAX];
+	int rxrate[WIFI_RADIO_MAX];
+	int rssi[WIFI_RADIO_MAX];
+	int avg_rssi[WIFI_RADIO_MAX];
+	int channel[WIFI_RADIO_MAX];
+	int mcs[WIFI_RADIO_MAX];
 	enum wifi_state state;
+	int radio_amount;
 };
 
 struct radio_context* wifi_hal_attach();

@@ -3,7 +3,7 @@
 function help
 {
 	echo
-	echo "Wifi usage: sudo $0 [ap|mesh|sta] <ssid> <psk> <ip> <mask> <freq>"
+	echo "Wifi usage: sudo $0 [radio_index] [ap|mesh|sta] <ssid> <psk> <ip> <mask> <freq>"
 	echo "Modem usage:"
 	echo "    sudo $0 modem <apn> <pin> <at_serial_port>"
 	echo "    Hox!! if you are testing with ubuntu, then might need to disable modem manager:"
@@ -33,7 +33,7 @@ mesh_activation()
 
 	modprobe batman-adv
 
-	radio_hal_daemon -w radio_mesh_join "$2" "$3" "$6"
+	radio_hal_daemon -w 0 radio_mesh_join "$2" "$3" "$6"
 
 	echo "bat0 up.."
 	batctl if add mesh0
@@ -60,21 +60,21 @@ mesh_activation()
 sta_activation()
 {
 
-	radio_hal_daemon -w radio_hal_connect_ap "$2" "$3"
+	radio_hal_daemon -w 0 radio_hal_connect_ap "$2" "$3"
 	# udhcp -i wlp1s0 TODO
 	ifconfig wlp1s0 "$4" netmask "$5"
 }
 
 ap_activation()
 {
-	radio_hal_daemon -w radio_hal_create_ap "$2" "$3" "$6"
+	radio_hal_daemon -w 0 radio_hal_create_ap "$2" "$3" "$6"
 	# dhcp service TODO
 	ifconfig wlp1s0 "$4" netmask "$5"
 }
 
 connect_internet()
 {
-  radio_hal_daemon -m radio_hal_get_rssi "$2" "$3" "$4"
+  radio_hal_daemon -m 0 radio_hal_get_rssi "$2" "$3" "$4"
   #radio_hal_daemon -m radio_hal_connect "$2" "$3" "$4"
   if [ $? -eq 0 ]; then
     ### get cdc-wdm device ####

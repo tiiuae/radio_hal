@@ -40,13 +40,13 @@ CFLAGS = -MMD -O2 -Wall -Werror -g -fPIC -I$(INC_DIR)/ \
 				-I$(SRC_DIR)/$(MODEM_HAL_DIR)/ \
 				-I$(SRC_DIR)/$(MODEM_HAL_DIR)/$(AT_CTL_DIR)/ \
 				-I$(SRC_DIR)/$(WIFI_HAL_DIR)/$(WPA_CTL_DIR)/ \
-				-I/usr/include/libnl3/ -std=${CSTD}
+				-I$(TARGET_DIR)/usr/include/libnl3/  -std=${CSTD}
 CXXFLAGS += -MMD -O2 -Wall -Werror -g -fPIC -I$(INC_DIR)/ \
 				-I$(SRC_DIR)/$(WIFI_HAL_DIR)/ \
 				-I$(SRC_DIR)/$(MODEM_HAL_DIR)/ \
 				-I$(SRC_DIR)/$(MODEM_HAL_DIR)/$(AT_CTL_DIR)/ \
 				-I$(SRC_DIR)/$(WIFI_HAL_DIR)/$(WPA_CTL_DIR)/ \
-				-I/usr/include/libnl3/ \
+				-I$(TARGET_DIR)/usr/include/libnl3/ \
 				-std=${CXXSTD}
 endif
 

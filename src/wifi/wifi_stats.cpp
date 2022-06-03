@@ -2,7 +2,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include "radio_hal.h"
+#include "../../inc/radio_hal.h"
 #include "wifi_hal.h"
 #include <sys/stat.h>
 #include <time.h>
@@ -58,13 +58,14 @@ static void wifi_get_driver_version(struct wifi_softc *sc)
 
 }
 
-int wifi_debugfs_init(struct wifi_softc *sc)
+__attribute__((unused)) int wifi_debugfs_init(struct wifi_softc *sc, int index)
 {
 	struct stat st;
 
 	wifi_get_driver_version(sc);
 	/*To Do:  Check if debugfs is mounted */
-	snprintf(sc->nl_ctx.debugfs_root, RADIO_DEBUGFS_DIRSIZE, "%s%s%s%s%s%s", "/sys/kernel/debug/ieee80211/", "phy", sc->nl_ctx.phyname, "/", wifi_get_dbgfs_basedir(sc->nl_ctx.drv_version), "/");
+	snprintf(sc->nl_ctx.debugfs_root, RADIO_DEBUGFS_DIRSIZE, "%s%s%s%s%s%s", "/sys/kernel/debug/ieee80211/", "phy", sc->nl_ctx.phyname[index], "/", wifi_get_dbgfs_basedir(sc->nl_ctx.drv_version), "/");
+
 	if (stat(sc->nl_ctx.debugfs_root, &st))
 		goto exit;
 

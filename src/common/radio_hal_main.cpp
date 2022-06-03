@@ -1,16 +1,16 @@
 #include <getopt.h>
 #include <cstring>
 #include <cstdlib>
-#include "radio_hal.h"
-#include "debug.h"
-#include "radio_hal_yaml.h"
+#include "../../inc/radio_hal.h"
+#include "../../inc/debug.h"
+#include "../../inc/radio_hal_yaml.h"
+
 
 #ifdef RADIO_HAL_UNIT_TEST
 
 #define member_size(type, member) sizeof(((type *)0)->member)
 
-static int test_radio_hal_api(struct radio_context *ctx, char *argv[],
-		enum radio_type type)
+static int test_radio_hal_api(struct radio_context *ctx, char *argv[], enum radio_type type)
 {
 	int err = 0;
 	char version[32] = {0};
@@ -18,9 +18,10 @@ static int test_radio_hal_api(struct radio_context *ctx, char *argv[],
 	char mac_addr[RADIO_MACADDR_SIZE] = {0};
 	char buf[4096] = {0};
 	struct radio_generic_func *radio_ops = ctx->cmn.rd_func;
-	char *cmd = argv[2];
+	char *cmd = argv[3];
 	struct wifi_config *w_config;
 	struct modem_config *m_config;
+	int index = atoi(optarg);
 
 	switch(type)
 	{
@@ -28,10 +29,10 @@ static int test_radio_hal_api(struct radio_context *ctx, char *argv[],
 			ctx->config = malloc(sizeof(wifi_config));
 			w_config = (wifi_config *) ctx->config;
 
-			if (argv[3] && argv[4] && argv[5]) {
-				strncpy(w_config->ssid, argv[3], member_size(wifi_config, ssid)-1);
-				strncpy(w_config->key, argv[4],member_size(wifi_config, key)-1);
-				strncpy(w_config->freq, argv[5],member_size(wifi_config, freq)-1);
+			if (argv[4] && argv[5] && argv[6]) {
+				strncpy(w_config->ssid, argv[4], member_size(wifi_config, ssid)-1);
+				strncpy(w_config->key, argv[5],member_size(wifi_config, key)-1);
+				strncpy(w_config->freq, argv[6],member_size(wifi_config, freq)-1);
 			}
 
 			radio_ops->open(ctx, RADIO_WIFI);
@@ -39,16 +40,16 @@ static int test_radio_hal_api(struct radio_context *ctx, char *argv[],
 				radio_ops->radio_get_hal_version(version);
 				hal_info(HAL_DBG_WIFI, "VERSION:%s\n", (char*) &version);
 			} else if(!strcmp(cmd, "radio_hal_get_iface_name")) {
-				radio_ops->radio_get_iface_name(ctx, ifname, 1);
+				radio_ops->radio_get_iface_name(ctx, ifname, index);
 				hal_info(HAL_DBG_WIFI, "IFNAME:%s\n", (char*) &ifname);
 			} else if(!strcmp(cmd, "radio_hal_get_rssi")) {
-				hal_info(HAL_DBG_WIFI, "RSSI:%d dbm\n", radio_ops->radio_get_rssi(ctx, 1));
+				hal_info(HAL_DBG_WIFI, "RSSI:%d dbm\n", radio_ops->radio_get_rssi(ctx, index));
 			} else if(!strcmp(cmd, "radio_hal_get_txrate")) {
-				hal_info(HAL_DBG_WIFI, "TXRATE:%d MBit/s\n", radio_ops->radio_get_txrate(ctx, 1));
+				hal_info(HAL_DBG_WIFI, "TXRATE:%d MBit/s\n", radio_ops->radio_get_txrate(ctx, index));
 			} else if(!strcmp(cmd, "radio_hal_get_rxrate")) {
-				hal_info(HAL_DBG_WIFI, "RXRATE:%d MBit/s\n", radio_ops->radio_get_rxrate(ctx, 1));
+				hal_info(HAL_DBG_WIFI, "RXRATE:%d MBit/s\n", radio_ops->radio_get_rxrate(ctx, index));
 			} else if(!strcmp(cmd, "radio_hal_get_macaddr")) {
-				radio_ops->radio_get_mac_address(ctx, mac_addr, 1);
+				radio_ops->radio_get_mac_address(ctx, mac_addr, index);
 				hal_info(HAL_DBG_WIFI, "MACADDR:%s \n", mac_addr);
 			} else if(!strcmp(cmd, "radio_hal_get_scan_result")) {
 				radio_ops->radio_get_scan_results(ctx, buf);
@@ -60,11 +61,11 @@ static int test_radio_hal_api(struct radio_context *ctx, char *argv[],
 			} else if(!strcmp(cmd, "radio_hal_create_ap")) {
 				radio_ops->radio_create_ap(ctx);
 			} else if(!strcmp(cmd, "radio_mesh_join")) {
-				radio_ops->radio_get_iface_name(ctx, ifname, 1);
+				radio_ops->radio_get_iface_name(ctx, ifname, index);
 				radio_ops->radio_join_mesh(ctx);
 			} else if(!strcmp(cmd, "radio_get_fw_stats")) {
-				radio_ops->radio_get_iface_name(ctx, ifname, 1);
-				radio_ops->radio_get_fw_stats(ctx, buf, 4096, 1);
+				radio_ops->radio_get_iface_name(ctx, ifname, index);
+				radio_ops->radio_get_fw_stats(ctx, buf, 4096, index);
 				hal_info(HAL_DBG_WIFI, "%s\n", buf);
 			} else if(!strcmp(cmd, "radio_capture_spectral_data")) {
 				radio_ops->radio_get_iface_name(ctx, ifname, 1);
