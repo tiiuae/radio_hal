@@ -1121,6 +1121,19 @@ int wifi_hal_get_fw_stats(struct radio_context *ctx, char *buf, int buf_size, in
 	return 0;
 }
 
+
+int wifi_hal_capture_spectral_scan(struct radio_context *ctx, int index)
+{
+	int ret;
+	struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
+
+	ret = wifi_capture_spectral_scan(sc);
+	if (ret)
+		return -1;
+
+	return 0;
+}
+
 static int wifi_hal_ctrl_recv(struct wifi_softc *sc, int index, char *reply, size_t *reply_len)
 {
 	struct wpa_ctrl_ctx *ctx = (wpa_ctrl_ctx *)sc->wpa_ctx;
@@ -1429,6 +1442,8 @@ static struct radio_generic_func wifi_hal_ops = {
 	.radio_create_ap = wifi_hal_create_ap,
 	.radio_join_mesh = wifi_hal_join_mesh,
 	.radio_connect = nullptr, //modem interface
+	.radio_get_fw_stats = wifi_hal_get_fw_stats,
+	.radio_capture_spectral_data = wifi_hal_capture_spectral_scan,
 };
 
 __attribute__((unused)) int wifi_hal_register_ops(struct radio_context *ctx)

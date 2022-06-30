@@ -67,6 +67,9 @@ static int test_radio_hal_api(struct radio_context *ctx, char *argv[], enum radi
 				radio_ops->radio_get_iface_name(ctx, ifname, index);
 				radio_ops->radio_get_fw_stats(ctx, buf, 4096, index);
 				hal_info(HAL_DBG_WIFI, "%s\n", buf);
+			} else if(!strcmp(cmd, "radio_capture_spectral_data")) {
+				radio_ops->radio_get_iface_name(ctx, ifname, 1);
+				radio_ops->radio_capture_spectral_data(ctx, 1);
 			}
 			radio_ops->close(ctx, RADIO_WIFI);
 			break;

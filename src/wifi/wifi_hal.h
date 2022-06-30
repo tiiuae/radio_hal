@@ -28,6 +28,14 @@ enum wifi_SystemEvent {
 	LAST_EVENT
 };
 
+enum wifi_driver_version {
+	WIFI_DRIVER_ATH9K,
+	WIFI_DRIVER_ATH10K,
+	WIFI_DRIVER_ATH11K,
+	WIFI_DRIVER_BRCM_FMAC,
+	WIFI_DRIVER_VERSION_MAX,
+};
+
 //typedef of function pointer
 typedef wifi_state (*wifiEventHandler)(struct radio_context *ctx, int index);
 
@@ -57,6 +65,7 @@ struct netlink_ctx {
 	int if_cb_err;
 	int csa_cb_err;
 	int linkinfo_cb_err;
+	enum wifi_driver_version drv_version;
 };
 
 struct wpa_ctrl_ctx {
@@ -85,4 +94,6 @@ struct radio_context* wifi_hal_attach();
 int wifi_hal_dettach(struct radio_context *ctx);
 int wifi_debugfs_init(struct wifi_softc *sc);
 int wifi_get_fw_stats(struct wifi_softc *sc, char *buf, int buf_size);
+int wifi_capture_spectral_scan(struct wifi_softc *sc);
+int wifi_hal_trigger_scan(struct wifi_softc *sc);
 #endif

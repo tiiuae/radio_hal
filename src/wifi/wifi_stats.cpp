@@ -1,16 +1,71 @@
+#include <cerrno>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include "../../inc/radio_hal.h"
 #include "wifi_hal.h"
 #include <sys/stat.h>
+#include <time.h>
+#include <unistd.h>
+#include "debug.h"
+
+static inline const char *wifi_get_dbgfs_basedir(enum wifi_driver_version drv_version)
+{
+    static const char *base_dir[] = { "ath9k", "ath10k", "ath11k", "",  ""};
+
+    return base_dir[drv_version];
+}
+
+static void wifi_get_driver_version(struct wifi_softc *sc)
+{
+	struct stat stats;
+	char dir[64] = {0};
+
+	snprintf(dir, 64, "%s%s%s%s", "/sys/kernel/debug/ieee80211/", "phy", sc->nl_ctx.phyname, "/ath9k/");
+	stat(dir, &stats);
+
+	if (S_ISDIR(stats.st_mode)) {
+		sc->nl_ctx.drv_version = WIFI_DRIVER_ATH9K;
+		return;
+	}
+
+	memset(dir, 0,  64);
+	snprintf(dir, 64, "%s%s%s%s", "/sys/kernel/debug/ieee80211/", "phy", sc->nl_ctx.phyname, "/ath10k/");
+	stat(dir, &stats);
+
+	if (S_ISDIR(stats.st_mode)) {
+		sc->nl_ctx.drv_version = WIFI_DRIVER_ATH10K;
+		return;
+	}
+
+	memset(dir, 0,  64);
+	snprintf(dir, 64, "%s%s%s%s", "/sys/kernel/debug/ieee80211/", "phy", sc->nl_ctx.phyname, "/ath11k/");
+	stat(dir, &stats);
+
+	if (S_ISDIR(stats.st_mode)) {
+		sc->nl_ctx.drv_version = WIFI_DRIVER_ATH11K;
+		return;
+	}
+
+	memset(dir, 0,  64);
+	snprintf(dir, 64, "%s", "sys/kernel/debug/brcmfmac/");
+	stat(dir, &stats);
+
+	if (S_ISDIR(stats.st_mode)) {
+		sc->nl_ctx.drv_version = WIFI_DRIVER_BRCM_FMAC;
+		return;
+	}
+
+}
 
 __attribute__((unused)) int wifi_debugfs_init(struct wifi_softc *sc, int index)
 {
 	struct stat st;
 
+	wifi_get_driver_version(sc);
 	/*To Do:  Check if debugfs is mounted */
-	snprintf(sc->nl_ctx.debugfs_root, RADIO_DEBUGFS_DIRSIZE, "%s%s%s%s", "/sys/kernel/debug/ieee80211/", "phy", sc->nl_ctx.phyname[index], "/ath10k/");
+	snprintf(sc->nl_ctx.debugfs_root, RADIO_DEBUGFS_DIRSIZE, "%s%s%s%s%s%s", "/sys/kernel/debug/ieee80211/", "phy", sc->nl_ctx.phyname[index], "/", wifi_get_dbgfs_basedir(sc->nl_ctx.drv_version), "/");
+
 	if (stat(sc->nl_ctx.debugfs_root, &st))
 		goto exit;
 
@@ -54,13 +109,13 @@ int  wifi_debugfs_write(struct wifi_softc *sc, const char *filename, const char 
 	int written = 0;
 	FILE *file;
 
-	file = wifi_debugfs_open(sc, filename, "r");
+	file = wifi_debugfs_open(sc, filename, "w");
 	if(!file)
 		return -1;
 
 	written = fwrite(cmd, 1, strlen(cmd), file);
 	if ((size_t)written != strlen(cmd))
-		printf("write is not matching with cmd param\n");
+		hal_err(HAL_DBG_WIFI, "write is not matching with cmd param\n");
 
 	fflush(file);
 	fclose(file);
@@ -96,3 +151,51 @@ int wifi_get_fw_stats(struct wifi_softc *sc, char *buf, int buf_size)
 	return wifi_debugfs_read(sc, "fw_stats", buf, buf_size);
 }
 
+int wifi_capture_spectral_scan(struct wifi_softc *sc)
+{
+	char filename[64];
+	time_t rawtime;
+	struct tm *timeinfo;
+	FILE *fp;
+	char *cmd;
+        int ret = 0;
+
+	time(&rawtime);
+	timeinfo = localtime(&rawtime);
+	strftime(filename, 64, "/var/log/spectral_data_%s", timeinfo);
+	if (sc->nl_ctx.drv_version == WIFI_DRIVER_ATH9K) {
+                ret = wifi_debugfs_write(sc, "spectral_scan_ctl", "chanscan");
+                if(ret)
+                        goto error;
+		wifi_hal_trigger_scan(sc);
+		/* wait for scan to complete */
+		sleep(2);
+                ret = wifi_debugfs_write(sc, "spectral_scan_ctl", "disable");
+                if(ret)
+                        goto error;
+		ret = asprintf(&cmd, "cat /sys/kernel/debug/ieee80211/phy%s/ath9k/%s%s", sc->nl_ctx.phyname, "spectral_scan0 > ", filename);
+	} else if (sc->nl_ctx.drv_version == WIFI_DRIVER_ATH10K) {
+                ret = wifi_debugfs_write(sc, "spectral_scan_ctl", "background");
+                if(ret)
+                        goto error;
+                ret = wifi_debugfs_write(sc, "spectral_scan_ctl", "trigger");
+                if(ret)
+                        goto error;
+		wifi_hal_trigger_scan(sc);
+		/* wait for scan to complete */
+		sleep(2);
+                ret = wifi_debugfs_write(sc, "spectral_scan_ctl", "disable");
+                if(ret)
+                        goto error;
+		ret = asprintf(&cmd, "cat /sys/kernel/debug/ieee80211/phy%s/ath10k/%s%s", sc->nl_ctx.phyname, "spectral_scan0 > ", filename);
+	} else {
+		return -ENOTSUP;
+	}
+
+	fp = popen(cmd, "r");
+	if (fp)
+	        pclose(fp);
+
+error:
+        return ret;
+}
