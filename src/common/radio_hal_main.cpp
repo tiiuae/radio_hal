@@ -26,7 +26,7 @@ static int test_radio_hal_api(struct radio_context *ctx, char *argv[], enum radi
 	switch(type)
 	{
 		case RADIO_WIFI:
-			ctx->config = malloc(sizeof(wifi_config));
+			ctx->config[0] = malloc(sizeof(wifi_config));
 			w_config = (wifi_config *) ctx->config;
 
 			if (argv[4] && argv[5] && argv[6]) {
@@ -52,17 +52,17 @@ static int test_radio_hal_api(struct radio_context *ctx, char *argv[], enum radi
 				radio_ops->radio_get_mac_address(ctx, mac_addr, index);
 				hal_info(HAL_DBG_WIFI, "MACADDR:%s \n", mac_addr);
 			} else if(!strcmp(cmd, "radio_hal_get_scan_result")) {
-				radio_ops->radio_get_scan_results(ctx, buf);
+				radio_ops->radio_get_scan_results(ctx, buf, index);
 				hal_info(HAL_DBG_WIFI, "%s\n", buf);
 			} else if(!strcmp(cmd, "radio_hal_connect_ap")) {
-				radio_ops->radio_get_scan_results(ctx, buf);
+				radio_ops->radio_get_scan_results(ctx, buf, index);
 				hal_info(HAL_DBG_WIFI, "%s\n", buf);
-				radio_ops->radio_connect_ap(ctx);
+				radio_ops->radio_connect_ap(ctx, index);
 			} else if(!strcmp(cmd, "radio_hal_create_ap")) {
-				radio_ops->radio_create_ap(ctx);
+				radio_ops->radio_create_ap(ctx, index);
 			} else if(!strcmp(cmd, "radio_mesh_join")) {
 				radio_ops->radio_get_iface_name(ctx, ifname, index);
-				radio_ops->radio_join_mesh(ctx);
+				radio_ops->radio_join_mesh(ctx, index);
 			} else if(!strcmp(cmd, "radio_get_fw_stats")) {
 				radio_ops->radio_get_iface_name(ctx, ifname, index);
 				radio_ops->radio_get_fw_stats(ctx, buf, 4096, index);
@@ -78,7 +78,7 @@ static int test_radio_hal_api(struct radio_context *ctx, char *argv[], enum radi
 		case RADIO_15_4:
 			break;
 		case RADIO_MODEM:
-			ctx->config = (struct modem_config *)malloc(sizeof(modem_config));
+			ctx->config[0] = (struct modem_config *)malloc(sizeof(modem_config));
 			m_config = (modem_config *) ctx->config;
 
 			if (argv[3] && argv[4] && argv[5]) {
@@ -123,7 +123,7 @@ static void show_radio_hal_help()
 int main(int argc, char *argv[])
 {
 	int c;
-	const char *short_opt = "w:b:z:m:h:";
+	const char *short_opt = "w:b:z:m:h";
 	int long_opt_ptr;
 	int err = 0;
 	struct radio_context *ctx = nullptr;

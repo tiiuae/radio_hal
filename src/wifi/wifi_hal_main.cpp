@@ -32,8 +32,8 @@
 #define RESP_BUFFER_SIZE sizeof(char) * 2048
 #define SOCKET_PATH_LENGTH sizeof(char) * 64
 
-static const char *client_socket_dir[WIFI_RADIO_MAX] = {nullptr, nullptr};
-static int debug;
+static const char *client_socket_dir[WIFI_RADIO_MAX] = {0 };
+static int debug = 0;
 
 static int wifi_hal_nl_finish_handler(struct nl_msg *msg, void *arg)
 {
