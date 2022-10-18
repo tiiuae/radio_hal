@@ -856,7 +856,7 @@ static int wifi_hal_send_wpa_mesh_command(struct wpa_ctrl_ctx *ctx, int index, c
 	return 0;
 }
 
-static int wifi_hal_trigger_scan(struct wifi_softc *sc, int index)
+int wifi_hal_trigger_scan(struct wifi_softc *sc, int index)
 {
 	char buf[CMD_BUFFER_SIZE];
 	size_t len = 0;
@@ -1114,7 +1114,7 @@ int wifi_hal_get_fw_stats(struct radio_context *ctx, char *buf, int buf_size, in
 {
 	int ret;
 	struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
-	ret = wifi_get_fw_stats(sc, buf, buf_size);
+	ret = wifi_get_fw_stats(sc, buf, buf_size, index);
 	if (ret)
 		return -1;
 
@@ -1127,7 +1127,7 @@ int wifi_hal_capture_spectral_scan(struct radio_context *ctx, int index)
 	int ret;
 	struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
 
-	ret = wifi_capture_spectral_scan(sc);
+	ret = wifi_capture_spectral_scan(sc, index);
 	if (ret)
 		return -1;
 
@@ -1510,7 +1510,8 @@ int wifi_hal_dettach(struct radio_context *ctx)
 	wifi_hal_nl80211_dettach(sc);
 
     free(sc);
-	free(ctx->config);
+	for (int i=0; i<RADIO_MAX_AMOUNT; i++)
+		free(ctx->config[i]);
 	free(ctx);
 
 	hal_info(HAL_DBG_WIFI, "WiFi HAL detach completed\n");

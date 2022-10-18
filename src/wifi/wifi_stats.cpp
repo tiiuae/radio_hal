@@ -21,7 +21,7 @@ static void wifi_get_driver_version(struct wifi_softc *sc)
 	struct stat stats;
 	char dir[64] = {0};
 
-	snprintf(dir, 64, "%s%s%s%s", "/sys/kernel/debug/ieee80211/", "phy", sc->nl_ctx.phyname, "/ath9k/");
+	snprintf(dir, 64, "%s%s%s%s", "/sys/kernel/debug/ieee80211/", "phy", (char*)sc->nl_ctx.phyname, "/ath9k/");
 	stat(dir, &stats);
 
 	if (S_ISDIR(stats.st_mode)) {
@@ -30,7 +30,7 @@ static void wifi_get_driver_version(struct wifi_softc *sc)
 	}
 
 	memset(dir, 0,  64);
-	snprintf(dir, 64, "%s%s%s%s", "/sys/kernel/debug/ieee80211/", "phy", sc->nl_ctx.phyname, "/ath10k/");
+	snprintf(dir, 64, "%s%s%s%s", "/sys/kernel/debug/ieee80211/", "phy", (char*)sc->nl_ctx.phyname, "/ath10k/");
 	stat(dir, &stats);
 
 	if (S_ISDIR(stats.st_mode)) {
@@ -39,7 +39,7 @@ static void wifi_get_driver_version(struct wifi_softc *sc)
 	}
 
 	memset(dir, 0,  64);
-	snprintf(dir, 64, "%s%s%s%s", "/sys/kernel/debug/ieee80211/", "phy", sc->nl_ctx.phyname, "/ath11k/");
+	snprintf(dir, 64, "%s%s%s%s", "/sys/kernel/debug/ieee80211/", "phy", (char*)sc->nl_ctx.phyname, "/ath11k/");
 	stat(dir, &stats);
 
 	if (S_ISDIR(stats.st_mode)) {
@@ -58,39 +58,39 @@ static void wifi_get_driver_version(struct wifi_softc *sc)
 
 }
 
-__attribute__((unused)) int wifi_debugfs_init(struct wifi_softc *sc, int index)
+int wifi_debugfs_init(struct wifi_softc *sc, int index)
 {
 	struct stat st;
 
 	wifi_get_driver_version(sc);
 	/*To Do:  Check if debugfs is mounted */
-	snprintf(sc->nl_ctx.debugfs_root, RADIO_DEBUGFS_DIRSIZE, "%s%s%s%s%s%s", "/sys/kernel/debug/ieee80211/", "phy", sc->nl_ctx.phyname[index], "/", wifi_get_dbgfs_basedir(sc->nl_ctx.drv_version), "/");
+	snprintf(sc->nl_ctx.debugfs_root[index], RADIO_DEBUGFS_DIRSIZE, "%s%s%s%s%s%s", "/sys/kernel/debug/ieee80211/", "phy", (char*)sc->nl_ctx.phyname[index], "/", wifi_get_dbgfs_basedir(sc->nl_ctx.drv_version), "/");
 
-	if (stat(sc->nl_ctx.debugfs_root, &st))
+	if (stat(sc->nl_ctx.debugfs_root[index], &st))
 		goto exit;
 
 	return 0;
 
 exit:
-	sc->nl_ctx.debugfs_root[0] = '\0';
+	sc->nl_ctx.debugfs_root[index][0] = '\0';
 	return -EACCES;
 }
 
-static FILE *wifi_debugfs_open(struct wifi_softc *sc, const char *filename, const char *mode)
+static FILE *wifi_debugfs_open(struct wifi_softc *sc, const char *filename, const char *mode, int index)
 {
 	char buf[1024];
 
-	sprintf(buf, "%s/%s", sc->nl_ctx.debugfs_root, filename);
+	sprintf(buf, "%s/%s", sc->nl_ctx.debugfs_root[index], filename);
 
 	return fopen(buf, mode);
 }
 
-int  wifi_debugfs_read(struct wifi_softc *sc, const char *filename, char *buf, int buf_size)
+int  wifi_debugfs_read(struct wifi_softc *sc, const char *filename, char *buf, int buf_size, int index)
 {
 	FILE *file;
 	size_t n_read;
 
-	file = wifi_debugfs_open(sc, filename, "r");
+	file = wifi_debugfs_open(sc, filename, "r", index);
 	if(!file)
 		return -1;
 
@@ -103,13 +103,13 @@ int  wifi_debugfs_read(struct wifi_softc *sc, const char *filename, char *buf, i
 	return 0;
 }
 
-int  wifi_debugfs_write(struct wifi_softc *sc, const char *filename, const char *cmd)
+int  wifi_debugfs_write(struct wifi_softc *sc, const char *filename, const char *cmd, int index)
 {
 
 	int written = 0;
 	FILE *file;
 
-	file = wifi_debugfs_open(sc, filename, "w");
+	file = wifi_debugfs_open(sc, filename, "w", index);
 	if(!file)
 		return -1;
 
@@ -123,14 +123,14 @@ int  wifi_debugfs_write(struct wifi_softc *sc, const char *filename, const char 
 	return 0;
 }
 
-int wifi_debugfs_search(struct wifi_softc *sc, const char *filename, const char *substring)
+int wifi_debugfs_search(struct wifi_softc *sc, const char *filename, const char *substring, int index)
 {
 	FILE *file;
 	size_t n = 0;
 	char *line = NULL;
 	int matched = 0;
 
-	file = wifi_debugfs_open(sc, filename, "r");
+	file = wifi_debugfs_open(sc, filename, "r", index);
 	if(file)
 		return -1;
 
@@ -146,12 +146,12 @@ int wifi_debugfs_search(struct wifi_softc *sc, const char *filename, const char 
 	return matched;
 }
 
-int wifi_get_fw_stats(struct wifi_softc *sc, char *buf, int buf_size)
+int wifi_get_fw_stats(struct wifi_softc *sc, char *buf, int buf_size, int index)
 {
-	return wifi_debugfs_read(sc, "fw_stats", buf, buf_size);
+	return wifi_debugfs_read(sc, "fw_stats", buf, buf_size, index);
 }
 
-int wifi_capture_spectral_scan(struct wifi_softc *sc)
+int wifi_capture_spectral_scan(struct wifi_softc *sc, int index)
 {
 	char filename[64];
 	time_t rawtime;
@@ -164,30 +164,30 @@ int wifi_capture_spectral_scan(struct wifi_softc *sc)
 	timeinfo = localtime(&rawtime);
 	strftime(filename, 64, "/var/log/spectral_data_%s", timeinfo);
 	if (sc->nl_ctx.drv_version == WIFI_DRIVER_ATH9K) {
-                ret = wifi_debugfs_write(sc, "spectral_scan_ctl", "chanscan");
+                ret = wifi_debugfs_write(sc, "spectral_scan_ctl", "chanscan", index);
                 if(ret)
                         goto error;
-		wifi_hal_trigger_scan(sc);
+		wifi_hal_trigger_scan(sc, index);
 		/* wait for scan to complete */
 		sleep(2);
-                ret = wifi_debugfs_write(sc, "spectral_scan_ctl", "disable");
+                ret = wifi_debugfs_write(sc, "spectral_scan_ctl", "disable", index);
                 if(ret)
                         goto error;
-		ret = asprintf(&cmd, "cat /sys/kernel/debug/ieee80211/phy%s/ath9k/%s%s", sc->nl_ctx.phyname, "spectral_scan0 > ", filename);
+		ret = asprintf(&cmd, "cat /sys/kernel/debug/ieee80211/phy%s/ath9k/%s%s", (char*)sc->nl_ctx.phyname[index], "spectral_scan0 > ", filename);
 	} else if (sc->nl_ctx.drv_version == WIFI_DRIVER_ATH10K) {
-                ret = wifi_debugfs_write(sc, "spectral_scan_ctl", "background");
+                ret = wifi_debugfs_write(sc, "spectral_scan_ctl", "background", index);
                 if(ret)
                         goto error;
-                ret = wifi_debugfs_write(sc, "spectral_scan_ctl", "trigger");
+                ret = wifi_debugfs_write(sc, "spectral_scan_ctl", "trigger", index);
                 if(ret)
                         goto error;
-		wifi_hal_trigger_scan(sc);
+		wifi_hal_trigger_scan(sc, index);
 		/* wait for scan to complete */
 		sleep(2);
-                ret = wifi_debugfs_write(sc, "spectral_scan_ctl", "disable");
+                ret = wifi_debugfs_write(sc, "spectral_scan_ctl", "disable", index);
                 if(ret)
                         goto error;
-		ret = asprintf(&cmd, "cat /sys/kernel/debug/ieee80211/phy%s/ath10k/%s%s", sc->nl_ctx.phyname, "spectral_scan0 > ", filename);
+		ret = asprintf(&cmd, "cat /sys/kernel/debug/ieee80211/phy%s/ath10k/%s%s", (char*)sc->nl_ctx.phyname[index], "spectral_scan0 > ", filename);
 	} else {
 		return -ENOTSUP;
 	}

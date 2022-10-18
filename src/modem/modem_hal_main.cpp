@@ -1004,7 +1004,8 @@ sc_alloc_failure:
 int modem_hal_detach(struct radio_context *ctx) {
 	struct modem_softc *sc = (struct modem_softc *) ctx->radio_private;
 
-	free(ctx->config);
+	for (int i=0; i<RADIO_MAX_AMOUNT; i++)
+		free(ctx->config[i]);
 	free(sc);
 	free(ctx);
 
