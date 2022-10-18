@@ -41,12 +41,12 @@ static void *modem_event_loop(void *arg) {
 }
 
 static void show_radio_hal_help() {
-	printf("\n------------------------- Radio HAL uses --------------------------------\n");
-	printf("./radio_manager -w <yaml configuration file wifi>\n");
+	printf("\n---------------- Radio manager configuration ---------------------------\n");
+	printf("./radio_manager -w \"<yaml configuration files wifi>\"\n");
 	printf("./radio_manager -b <yaml configuration file bluetooth>\n");
 	printf("./radio_manager -z <yaml configuration file 15.4 radio>\n");
 	printf("./radio_manager -m <yaml configuration file modem>\n");
-	printf("\n-------------------------- ----------------------------------------------\n");
+	printf("\n------------------------------------------------------------------------\n");
 }
 
 int main(int argc, char *argv[]) {
@@ -55,10 +55,10 @@ int main(int argc, char *argv[]) {
 	int long_opt_ptr;
 	//wifi
 	struct radio_context *w_ctx = nullptr;
-	struct radio_generic_func *w_radio_ops;
+	struct radio_generic_func *w_radio_ops = nullptr;
 	//modem
 	struct radio_context *m_ctx = nullptr;
-	struct radio_generic_func *m_radio_ops;
+	struct radio_generic_func *m_radio_ops = nullptr;
 	//other
 	struct radio_context *z_ctx = nullptr;
 	struct radio_context *b_ctx = nullptr;
@@ -73,6 +73,10 @@ int main(int argc, char *argv[]) {
 			};
 
 	hal_info(HAL_DBG_COMMON, "*  argc = %d argv = %s %s\n", argc, argv[0], argv[2]);
+	if (argc == 1) {
+		show_radio_hal_help();
+		return 0;
+	}
 	while ((c = getopt_long(argc, argv, short_opt, long_opt, &long_opt_ptr)) != -1) {
 		switch (c) {
 			case 'w':
