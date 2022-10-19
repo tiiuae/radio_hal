@@ -1188,6 +1188,13 @@ static int wifi_hal_join_mesh(struct radio_context *ctx, int index)
 	}
 	free(cmd_buf);
 
+	// set bandwidth
+	ret = wifi_debugfs_write(sc, "chanbw", config->bw, index);
+	if (ret) {
+		hal_warn(HAL_DBG_WIFI, "failed to set bandwidth, card not supporting?\n");
+		return -1;
+	}
+
 	str_len = asprintf(&cmd_buf, (const char*) "SET_NETWORK %s ssid \"%s\"", nw_id, config->ssid);
 	if (str_len)
 		ret = wifi_hal_send_wpa_mesh_command(sc->wpa_ctx, index, cmd_buf, resp_buf, &len);
