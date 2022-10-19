@@ -1218,7 +1218,7 @@ static int wifi_hal_join_mesh(struct radio_context *ctx, int index)
 	}
 	free(cmd_buf);
 
-	str_len = asprintf(&cmd_buf, (const char*) "SET_NETWORK %s key_mgmt SAE", nw_id);
+	str_len = asprintf(&cmd_buf, (const char*) "SET_NETWORK %s key_mgmt %s", nw_id, config->enc);
 	if (str_len)
 		ret = wifi_hal_send_wpa_mesh_command(sc->wpa_ctx, index, cmd_buf, resp_buf, &len);
 	else
