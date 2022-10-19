@@ -48,7 +48,7 @@ typedef struct {
 
 enum radio {
 	WIFI_RADIO_0,
-	WIFI_RADIO_1,
+	WIFI_RADIO_1,   /* Enable this, if you have two wifi cards */
 	WIFI_RADIO_MAX  /* Don't remove */
 };
 
@@ -58,7 +58,7 @@ struct netlink_ctx {
 	int ifindex[WIFI_RADIO_MAX];
 	char ifname[WIFI_RADIO_MAX][RADIO_IFNAME_SIZE];
 	char phyname[WIFI_RADIO_MAX][RADIO_PHYNAME_SIZE];
-	char debugfs_root[RADIO_DEBUGFS_DIRSIZE];
+	char debugfs_root[WIFI_RADIO_MAX][RADIO_DEBUGFS_DIRSIZE];
 	struct nl_cb *if_cb;
 	struct nl_cb *link_info_cb;
 	struct nl_cb *gen_nl_cb;
@@ -92,8 +92,10 @@ struct wifi_softc {
 
 struct radio_context* wifi_hal_attach();
 int wifi_hal_dettach(struct radio_context *ctx);
-int wifi_debugfs_init(struct wifi_softc *sc);
-int wifi_get_fw_stats(struct wifi_softc *sc, char *buf, int buf_size);
-int wifi_capture_spectral_scan(struct wifi_softc *sc);
-int wifi_hal_trigger_scan(struct wifi_softc *sc);
+int wifi_debugfs_init(struct wifi_softc *sc, int index);
+int wifi_debugfs_read(struct wifi_softc *sc, const char *filename, char *buf, int buf_size, int index);
+int wifi_debugfs_write(struct wifi_softc *sc, const char *filename, const char *cmd, int index);
+int wifi_get_fw_stats(struct wifi_softc *sc, char *buf, int buf_size, int index);
+int wifi_capture_spectral_scan(struct wifi_softc *sc, int index);
+int wifi_hal_trigger_scan(struct wifi_softc *sc, int index);
 #endif
