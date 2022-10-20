@@ -566,6 +566,38 @@ static int wifi_hal_get_stainfo(struct netlink_ctx *nl_ctx, int index)
 	return 0;
 }
 
+static int wifi_hal_set_txpower(struct netlink_ctx *nl_ctx, int index, struct wifi_config *config)
+{
+	struct nl_msg* msg = nlmsg_alloc();
+	int ret = 0;
+	enum nl80211_commands command = NL80211_CMD_SET_WIPHY;
+
+	if (!msg) {
+		hal_err(HAL_DBG_WIFI, "failed to allocate NL80211 message.\n");
+		return -ENOMEM;
+	}
+
+    /* Create the message, so it will send a command to the nl80211 interface. */
+	genlmsg_put(msg, 0, 0, genl_ctrl_resolve(nl_ctx->sock, "nl80211"), 0, 0, command, 0);
+
+	/* Add specific attributes to change the frequency of the device. */
+	NLA_PUT_U32(msg, NL80211_ATTR_IFINDEX, if_nametoindex(nl_ctx->ifname[index]));
+	NLA_PUT_U32(msg, NL80211_ATTR_WIPHY_TX_POWER_SETTING, NL80211_TX_POWER_LIMITED);
+	NLA_PUT_U32(msg, NL80211_ATTR_WIPHY_TX_POWER_LEVEL, config->tx_power * 100); // dbm to mdBm
+
+	/* Finally send it and receive the amount of bytes sent. */
+	ret = nl_send_auto(nl_ctx->sock, msg);
+	if (ret<0)
+		goto nla_put_failure;
+
+	nlmsg_free(msg);
+	return EXIT_SUCCESS;
+
+nla_put_failure:
+	nlmsg_free(msg);
+	return -EXIT_FAILURE;
+}
+
 static int wifi_hal_get_hal_version(char *version)
 {
 	snprintf(version, 32, "%d.%d", WIFI_RADIO_HAL_MAJOR_VERSION, WIFI_RADIO_HAL_MINOR_VERSION);
@@ -581,8 +613,6 @@ int wifi_hal_get_iface_name(struct radio_context *ctx, char *name, int radio_ind
 
 	return 0;
 }
-
-
 
 static int wifi_hal_get_txrate (struct radio_context *ctx, int radio_index)
 {
@@ -1112,6 +1142,7 @@ static int wifi_hal_create_ap(struct radio_context *ctx, int index)
 static int wifi_hal_join_mesh(struct radio_context *ctx, int index)
 {
 	struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
+	struct netlink_ctx *nl_ctx = &sc->nl_ctx;
 	struct wifi_config *config = (struct wifi_config *)ctx->config[index];
 	char *cmd_buf = nullptr;
 	char resp_buf[RESP_BUFFER_SIZE] = {0};
@@ -1193,6 +1224,10 @@ static int wifi_hal_join_mesh(struct radio_context *ctx, int index)
 	if (ret) {
 		hal_warn(HAL_DBG_WIFI, "failed to set bandwidth, card not supporting?\n");
 	}
+
+	ret = wifi_hal_set_txpower(nl_ctx, index, config);
+	if (ret<0)
+		hal_warn(HAL_DBG_WIFI, "failed to set tx_power, card not supporting?\n");
 
 	str_len = asprintf(&cmd_buf, (const char*) "SET_NETWORK %s ssid \"%s\"", nw_id, config->ssid);
 	if (str_len)
