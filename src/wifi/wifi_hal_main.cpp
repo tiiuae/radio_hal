@@ -646,7 +646,7 @@ static int wifi_hal_set_txpower(struct netlink_ctx *nl_ctx, int index, struct wi
 	genlmsg_put(msg, 0, 0,	nl_ctx->nl80211_id, 0, 0, NL80211_CMD_SET_WIPHY, 0);
 
 	nl_ctx->set_cb_err = 1;
-	/* Add specific attributes to change the frequency of the device. */
+	/* Add specific attributes to change the txpower of the device. */
 	NLA_PUT_U32(msg, NL80211_ATTR_IFINDEX, if_nametoindex(nl_ctx->ifname[index]));
 	NLA_PUT_U32(msg, NL80211_ATTR_WIPHY_TX_POWER_SETTING, NL80211_TX_POWER_LIMITED);
 	NLA_PUT_U32(msg, NL80211_ATTR_WIPHY_TX_POWER_LEVEL, config->tx_power * 100); // dbm to mdBm
@@ -665,6 +665,41 @@ static int wifi_hal_set_txpower(struct netlink_ctx *nl_ctx, int index, struct wi
 	return EXIT_SUCCESS;
 
 nla_put_failure:
+	nlmsg_free(msg);
+	return -EXIT_FAILURE;
+}
+
+static int wifi_hal_set_country(struct netlink_ctx *nl_ctx, int index, struct wifi_config *config)
+{
+	struct nl_msg* msg = nlmsg_alloc();
+	int ret = 0;
+
+	if (!msg) {
+		hal_err(HAL_DBG_WIFI, "failed to allocate NL80211 message.\n");
+		return -ENOMEM;
+	}
+
+	/* Create the message, so it will send a command to the nl80211 interface. */
+	genlmsg_put(msg, 0, 0,	nl_ctx->nl80211_id, 0, 0, NL80211_CMD_REQ_SET_REG, 0);
+
+	nl_ctx->set_cb_err = 1;
+	/* Add specific attributes to change the country of the device. */
+	NLA_PUT_STRING(msg, NL80211_ATTR_REG_ALPHA2, config->country);
+
+	/* Finally send it and receive the amount of bytes sent. */
+	ret = nl_send_auto(nl_ctx->sock, msg);
+	if (ret<0)
+		goto nla_put_failure;
+
+	while (nl_ctx->set_cb_err > 0)
+	{
+		nl_recvmsgs(nl_ctx->sock, nl_ctx->set_cb);
+	}
+
+	nlmsg_free(msg);
+	return EXIT_SUCCESS;
+
+	nla_put_failure:
 	nlmsg_free(msg);
 	return -EXIT_FAILURE;
 }
@@ -1054,6 +1089,10 @@ static int wifi_hal_connect_ap(struct radio_context *ctx, int index)
 	if (ret<0)
 		hal_warn(HAL_DBG_WIFI, "failed to set distance, card not supporting?\n");
 
+	ret = wifi_hal_set_country(nl_ctx, index, config);
+	if (ret<0)
+		hal_warn(HAL_DBG_WIFI, "failed to set country, card not supporting?\n");
+
 	str_len = asprintf(&cmd_buf, (const char*) "%s%s%s\"%s\"", "SET_NETWORK ", nw_id, " ssid ", config->ssid);
 	if (str_len)
 		ret = wifi_hal_send_wpa_command(sc->wpa_ctx, index, cmd_buf, resp_buf, &len);
@@ -1160,6 +1199,10 @@ static int wifi_hal_create_ap(struct radio_context *ctx, int index)
 	if (ret<0)
 		hal_warn(HAL_DBG_WIFI, "failed to set distance, card not supporting?\n");
 
+	ret = wifi_hal_set_country(nl_ctx, index, config);
+	if (ret<0)
+		hal_warn(HAL_DBG_WIFI, "failed to set country, card not supporting?\n");
+
 	str_len = asprintf(&cmd_buf, (const char*) "SET_NETWORK %s ssid \"%s\"", nw_id, config->ssid);
 	if (str_len)
 		ret = wifi_hal_send_wpa_command(sc->wpa_ctx, index, cmd_buf, resp_buf, &len);
@@ -1180,19 +1223,6 @@ static int wifi_hal_create_ap(struct radio_context *ctx, int index)
 
 	if (ret || strncmp(resp_buf, "OK", 2) != 0) {
 		hal_err(HAL_DBG_WIFI, "failed to set mesh freq\n");
-		return -1;
-	}
-	free(cmd_buf);
-
-	// todo not possible with wpa_cli?
-	str_len = asprintf(&cmd_buf, (const char*) "iw reg set %s", config->country);
-	if (str_len)
-		ret = system(cmd_buf);
-	else
-		return -1;
-
-	if (ret) {
-		hal_err(HAL_DBG_WIFI, "failed to set mesh country\n");
 		return -1;
 	}
 	free(cmd_buf);
@@ -1305,19 +1335,6 @@ static int wifi_hal_join_mesh(struct radio_context *ctx, int index)
 	}
 	free(cmd_buf);
 
-	// todo not possible with wpa_cli?
-	str_len = asprintf(&cmd_buf, (const char*) "iw reg set %s", config->country);
-	if (str_len)
-		ret = system(cmd_buf);
-	else
-		return -1;
-
-	if (ret) {
-		hal_err(HAL_DBG_WIFI, "failed to set mesh country\n");
-		return -1;
-	}
-	free(cmd_buf);
-
 	// set bandwidth
 	ret = wifi_debugfs_write(sc, "chanbw", config->bw, index);
 	if (ret)
@@ -1330,6 +1347,10 @@ static int wifi_hal_join_mesh(struct radio_context *ctx, int index)
 	ret = wifi_hal_set_distance(nl_ctx, index, config);
 	if (ret<0)
 		hal_warn(HAL_DBG_WIFI, "failed to set distance, card not supporting?\n");
+
+	ret = wifi_hal_set_country(nl_ctx, index, config);
+	if (ret<0)
+		hal_warn(HAL_DBG_WIFI, "failed to set country, card not supporting?\n");
 
 	str_len = asprintf(&cmd_buf, (const char*) "SET_NETWORK %s ssid \"%s\"", nw_id, config->ssid);
 	if (str_len)
