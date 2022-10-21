@@ -61,8 +61,10 @@ struct netlink_ctx {
 	char debugfs_root[WIFI_RADIO_MAX][RADIO_DEBUGFS_DIRSIZE];
 	struct nl_cb *if_cb;
 	struct nl_cb *link_info_cb;
+	struct nl_cb *set_cb;
 	struct nl_cb *gen_nl_cb;
 	int if_cb_err;
+	int set_cb_err;
 	int csa_cb_err;
 	int linkinfo_cb_err;
 	enum wifi_driver_version drv_version;

@@ -43,6 +43,13 @@ static int wifi_hal_nl_finish_handler(struct nl_msg *msg, void *arg)
 	return NL_SKIP;
 }
 
+static int wifi_hal_nl_ack_handler(struct nl_msg *msg, void *arg)
+{
+	int *ret = (int *)arg;
+	*ret = 0;
+	return NL_STOP;
+}
+
 void wifi_hal_mac_addr_n2a(char *mac_addr, unsigned char *arg)
 {
 	int i, l;
@@ -337,14 +344,24 @@ static int wifi_hal_register_nl_cb(struct wifi_softc *sc)
 		goto error;
 	}
 
+	nl_ctx->set_cb = nl_cb_alloc(NL_CB_DEFAULT);
+	if (!nl_ctx->set_cb)
+	{
+		hal_err(HAL_DBG_WIFI, "failed to allocate set param NL callback.\n");
+		goto error;
+	}
+
 	nl_cb_set(nl_ctx->if_cb, NL_CB_VALID , NL_CB_CUSTOM, wifi_hal_ifname_resp_hdlr, sc);
 	nl_cb_set(nl_ctx->if_cb, NL_CB_FINISH, NL_CB_CUSTOM, wifi_hal_nl_finish_handler, &(nl_ctx->if_cb_err));
 	nl_cb_set(nl_ctx->link_info_cb, NL_CB_VALID , NL_CB_CUSTOM, wifi_hal_connection_info_hdlr, sc);
 	nl_cb_set(nl_ctx->link_info_cb, NL_CB_FINISH, NL_CB_CUSTOM, wifi_hal_nl_finish_handler, &(nl_ctx->linkinfo_cb_err));
+	nl_cb_set(nl_ctx->set_cb, NL_CB_ACK, NL_CB_CUSTOM, wifi_hal_nl_ack_handler, &(nl_ctx->set_cb_err));
+	nl_cb_set(nl_ctx->set_cb, NL_CB_FINISH, NL_CB_CUSTOM, wifi_hal_nl_finish_handler, &(nl_ctx->set_cb_err));
 
 	return 0;
 
 error:
+	nl_cb_put(nl_ctx->set_cb );
 	nl_cb_put(nl_ctx->if_cb );
 	nl_cb_put(nl_ctx->link_info_cb);
 	return -ENOMEM;
@@ -566,11 +583,59 @@ static int wifi_hal_get_stainfo(struct netlink_ctx *nl_ctx, int index)
 	return 0;
 }
 
+static int wifi_hal_set_distance(struct netlink_ctx *nl_ctx, int index, struct wifi_config *config)
+{
+	struct nl_msg* msg = nlmsg_alloc();
+	int ret = 0;
+	unsigned int coverage;
+
+	if (!msg) {
+		hal_err(HAL_DBG_WIFI, "failed to allocate NL80211 message.\n");
+		return -ENOMEM;
+	}
+
+	/* Create the message, so it will send a command to the nl80211 interface. */
+	genlmsg_put(msg, 0, 0,	nl_ctx->nl80211_id, 0, 0, NL80211_CMD_SET_WIPHY, 0);
+	nl_ctx->set_cb_err = 1;
+	/* Add specific attributes to change the distance of the device. */
+	NLA_PUT_U32(msg, NL80211_ATTR_WIPHY, atoi(nl_ctx->phyname[index]));
+	/*
+	* Divide double the distance by the speed of light
+	* in m/usec (300) to get round-trip time in microseconds
+	* and then divide the result by three to get coverage class
+	* as specified in IEEE 802.11-2007 table 7-27.
+	* Values are rounded upwards.
+	*/
+	coverage = (config->distance + 449) / 450;
+	if (coverage > 255)
+		goto invalid_distance;
+
+	NLA_PUT_U32(msg, NL80211_ATTR_WIPHY_COVERAGE_CLASS, coverage);
+
+	/* Finally send it and receive the amount of bytes sent. */
+	ret = nl_send_auto(nl_ctx->sock, msg);
+
+	if (ret<0)
+		goto nla_put_failure;
+
+	while (nl_ctx->set_cb_err > 0)
+	{
+		nl_recvmsgs(nl_ctx->sock, nl_ctx->set_cb);
+	}
+
+	nlmsg_free(msg);
+	return EXIT_SUCCESS;
+
+invalid_distance:
+nla_put_failure:
+	nlmsg_free(msg);
+	return -EXIT_FAILURE;
+}
+
 static int wifi_hal_set_txpower(struct netlink_ctx *nl_ctx, int index, struct wifi_config *config)
 {
 	struct nl_msg* msg = nlmsg_alloc();
 	int ret = 0;
-	enum nl80211_commands command = NL80211_CMD_SET_WIPHY;
 
 	if (!msg) {
 		hal_err(HAL_DBG_WIFI, "failed to allocate NL80211 message.\n");
@@ -578,8 +643,9 @@ static int wifi_hal_set_txpower(struct netlink_ctx *nl_ctx, int index, struct wi
 	}
 
     /* Create the message, so it will send a command to the nl80211 interface. */
-	genlmsg_put(msg, 0, 0, genl_ctrl_resolve(nl_ctx->sock, "nl80211"), 0, 0, command, 0);
+	genlmsg_put(msg, 0, 0,	nl_ctx->nl80211_id, 0, 0, NL80211_CMD_SET_WIPHY, 0);
 
+	nl_ctx->set_cb_err = 1;
 	/* Add specific attributes to change the frequency of the device. */
 	NLA_PUT_U32(msg, NL80211_ATTR_IFINDEX, if_nametoindex(nl_ctx->ifname[index]));
 	NLA_PUT_U32(msg, NL80211_ATTR_WIPHY_TX_POWER_SETTING, NL80211_TX_POWER_LIMITED);
@@ -589,6 +655,11 @@ static int wifi_hal_set_txpower(struct netlink_ctx *nl_ctx, int index, struct wi
 	ret = nl_send_auto(nl_ctx->sock, msg);
 	if (ret<0)
 		goto nla_put_failure;
+
+	while (nl_ctx->set_cb_err > 0)
+	{
+		nl_recvmsgs(nl_ctx->sock, nl_ctx->set_cb);
+	}
 
 	nlmsg_free(msg);
 	return EXIT_SUCCESS;
@@ -928,6 +999,7 @@ static int wifi_hal_connect_ap(struct radio_context *ctx, int index)
 {
 	struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
 	struct wifi_config *config = (struct wifi_config *)ctx->config[index];
+	struct netlink_ctx *nl_ctx = &sc->nl_ctx;
 	char *cmd_buf = nullptr;
 	char resp_buf[RESP_BUFFER_SIZE] = {0};
 	char nw_id[6] = {0};
@@ -969,6 +1041,16 @@ static int wifi_hal_connect_ap(struct radio_context *ctx, int index)
 	}
 	free(cmd_buf);
 
+	// set bandwidth
+	ret = wifi_debugfs_write(sc, "chanbw", config->bw, index);
+	if (ret) {
+		hal_warn(HAL_DBG_WIFI, "failed to set bandwidth, card not supporting?\n");
+	}
+
+	ret = wifi_hal_set_txpower(nl_ctx, index, config);
+	if (ret<0)
+		hal_warn(HAL_DBG_WIFI, "failed to set tx_power, card not supporting?\n");
+
 	str_len = asprintf(&cmd_buf, (const char*) "%s%s%s\"%s\"", "SET_NETWORK ", nw_id, " ssid ", config->ssid);
 	if (str_len)
 		ret = wifi_hal_send_wpa_command(sc->wpa_ctx, index, cmd_buf, resp_buf, &len);
@@ -1007,6 +1089,7 @@ static int wifi_hal_create_ap(struct radio_context *ctx, int index)
 {
 	struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
 	struct wifi_config *config = (struct wifi_config *)ctx->config[index];
+	struct netlink_ctx *nl_ctx = &sc->nl_ctx;
 	char *cmd_buf = nullptr;
 	char resp_buf[RESP_BUFFER_SIZE] = {0};
 	char nw_id[6] = {0};
@@ -1060,6 +1143,16 @@ static int wifi_hal_create_ap(struct radio_context *ctx, int index)
 		return -1;
 	}
 	free(cmd_buf);
+
+	// set bandwidth
+	ret = wifi_debugfs_write(sc, "chanbw", config->bw, index);
+	if (ret) {
+		hal_warn(HAL_DBG_WIFI, "failed to set bandwidth, card not supporting?\n");
+	}
+
+	ret = wifi_hal_set_txpower(nl_ctx, index, config);
+	if (ret<0)
+		hal_warn(HAL_DBG_WIFI, "failed to set tx_power, card not supporting?\n");
 
 	str_len = asprintf(&cmd_buf, (const char*) "SET_NETWORK %s ssid \"%s\"", nw_id, config->ssid);
 	if (str_len)
@@ -1228,6 +1321,10 @@ static int wifi_hal_join_mesh(struct radio_context *ctx, int index)
 	ret = wifi_hal_set_txpower(nl_ctx, index, config);
 	if (ret<0)
 		hal_warn(HAL_DBG_WIFI, "failed to set tx_power, card not supporting?\n");
+
+	ret = wifi_hal_set_distance(nl_ctx, index, config);
+	if (ret<0)
+		hal_warn(HAL_DBG_WIFI, "failed to set distance, card not supporting?\n");
 
 	str_len = asprintf(&cmd_buf, (const char*) "SET_NETWORK %s ssid \"%s\"", nw_id, config->ssid);
 	if (str_len)
