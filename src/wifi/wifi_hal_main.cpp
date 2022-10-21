@@ -1043,13 +1043,16 @@ static int wifi_hal_connect_ap(struct radio_context *ctx, int index)
 
 	// set bandwidth
 	ret = wifi_debugfs_write(sc, "chanbw", config->bw, index);
-	if (ret) {
+	if (ret)
 		hal_warn(HAL_DBG_WIFI, "failed to set bandwidth, card not supporting?\n");
-	}
 
 	ret = wifi_hal_set_txpower(nl_ctx, index, config);
 	if (ret<0)
 		hal_warn(HAL_DBG_WIFI, "failed to set tx_power, card not supporting?\n");
+
+	ret = wifi_hal_set_distance(nl_ctx, index, config);
+	if (ret<0)
+		hal_warn(HAL_DBG_WIFI, "failed to set distance, card not supporting?\n");
 
 	str_len = asprintf(&cmd_buf, (const char*) "%s%s%s\"%s\"", "SET_NETWORK ", nw_id, " ssid ", config->ssid);
 	if (str_len)
@@ -1139,20 +1142,23 @@ static int wifi_hal_create_ap(struct radio_context *ctx, int index)
 		return -1;
 
 	if (ret || strncmp(resp_buf, "OK", 2) != 0) {
-		hal_err(HAL_DBG_WIFI, "failed to set mesh mode\n");
+		hal_err(HAL_DBG_WIFI, "failed to set ap mode\n");
 		return -1;
 	}
 	free(cmd_buf);
 
 	// set bandwidth
 	ret = wifi_debugfs_write(sc, "chanbw", config->bw, index);
-	if (ret) {
+	if (ret)
 		hal_warn(HAL_DBG_WIFI, "failed to set bandwidth, card not supporting?\n");
-	}
 
 	ret = wifi_hal_set_txpower(nl_ctx, index, config);
 	if (ret<0)
 		hal_warn(HAL_DBG_WIFI, "failed to set tx_power, card not supporting?\n");
+
+	ret = wifi_hal_set_distance(nl_ctx, index, config);
+	if (ret<0)
+		hal_warn(HAL_DBG_WIFI, "failed to set distance, card not supporting?\n");
 
 	str_len = asprintf(&cmd_buf, (const char*) "SET_NETWORK %s ssid \"%s\"", nw_id, config->ssid);
 	if (str_len)
@@ -1314,9 +1320,8 @@ static int wifi_hal_join_mesh(struct radio_context *ctx, int index)
 
 	// set bandwidth
 	ret = wifi_debugfs_write(sc, "chanbw", config->bw, index);
-	if (ret) {
+	if (ret)
 		hal_warn(HAL_DBG_WIFI, "failed to set bandwidth, card not supporting?\n");
-	}
 
 	ret = wifi_hal_set_txpower(nl_ctx, index, config);
 	if (ret<0)
