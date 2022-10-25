@@ -88,14 +88,17 @@ int main(int argc, char *argv[]) {
 					w_radio_ops = w_ctx->cmn.rd_func;
 
 				for (int i = 0; i<WIFI_RADIO_MAX; i++)
-					w_ctx->config[i] = malloc(sizeof(wifi_config));
+					w_ctx->config[i] = calloc(1,sizeof(wifi_config));
 
 				if (optarg)
 					ret = radio_hal_yaml_config(w_ctx->config, (char *) optarg, RADIO_WIFI);
 				if (ret < 0)
 					return -1;
 
-				w_radio_ops->open(w_ctx, RADIO_WIFI);
+				ret = w_radio_ops->open(w_ctx, RADIO_WIFI);
+				if (ret<0) {
+					return -1;
+				}
 				if (count < EVENT_THREAD_AMOUNT) {
 					ret = pthread_create(&s_event_reader[count++], nullptr, &wifi_event_loop, (void *) w_ctx);
 					if (ret < 0) {

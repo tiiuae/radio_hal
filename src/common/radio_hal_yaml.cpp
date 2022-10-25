@@ -87,6 +87,12 @@ static int radio_hal_yaml_wifi_config(struct wifi_config **conf, char *key, char
 	} else if(!strncmp(key, "type", strlen("type"))) {
 		if (strlen(value) - 1 < member_size(wifi_config, type))
 			strncpy(conf_struct->type, value, member_size(wifi_config, type));
+	} else if(!strncmp(key, "mesh_fwding", strlen("mesh_fwding"))) {
+		errno = 0;
+		conf_struct->mesh_fwding = (int)strtol(value, &stopped, 10);
+		if (errno) {
+			hal_err(HAL_DBG_WIFI, "key: %s value: %s not valid\n", key, value);
+		}
 	} else
 		hal_warn(HAL_DBG_WIFI, "no data structure for key!\n");
 
@@ -130,7 +136,7 @@ int radio_hal_yaml_config(void *conf_struct, char* config_files, radio_type radi
 
 	while( file_name != nullptr ) {
 
-		printf(" %s\n", file_name); //printing the token
+		hal_info(HAL_DBG_COMMON, "Configuration from: %s\n", file_name); //printing the token
 
 		FILE *configuration = fopen(file_name, "r");
 		if (!configuration) {

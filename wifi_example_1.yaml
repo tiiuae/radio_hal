@@ -13,3 +13,4 @@ distance: 3000                  # distance (coverage-class fine tuning)
 tx_power: 30                    # select 30dBm, HW and regulations limiting it correct level. Can be used to set lower dBm levels for testing purposes (e.g. 5dBm)
 mode: "ap"                      # mesh=mesh network, ap=debug hotspot
 type: "11s"                     # 11s or ibss
+mesh_fwding: 0                  # 0=11s routing disable (use batman), 1=11s routing enable
