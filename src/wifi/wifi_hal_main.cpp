@@ -43,6 +43,13 @@ static int wifi_hal_nl_finish_handler(struct nl_msg *msg, void *arg)
 	return NL_SKIP;
 }
 
+static int wifi_hal_nl_ack_handler(struct nl_msg *msg, void *arg)
+{
+	int *ret = (int *)arg;
+	*ret = 0;
+	return NL_STOP;
+}
+
 void wifi_hal_mac_addr_n2a(char *mac_addr, unsigned char *arg)
 {
 	int i, l;
@@ -337,14 +344,24 @@ static int wifi_hal_register_nl_cb(struct wifi_softc *sc)
 		goto error;
 	}
 
+	nl_ctx->set_cb = nl_cb_alloc(NL_CB_DEFAULT);
+	if (!nl_ctx->set_cb)
+	{
+		hal_err(HAL_DBG_WIFI, "failed to allocate set param NL callback.\n");
+		goto error;
+	}
+
 	nl_cb_set(nl_ctx->if_cb, NL_CB_VALID , NL_CB_CUSTOM, wifi_hal_ifname_resp_hdlr, sc);
 	nl_cb_set(nl_ctx->if_cb, NL_CB_FINISH, NL_CB_CUSTOM, wifi_hal_nl_finish_handler, &(nl_ctx->if_cb_err));
 	nl_cb_set(nl_ctx->link_info_cb, NL_CB_VALID , NL_CB_CUSTOM, wifi_hal_connection_info_hdlr, sc);
 	nl_cb_set(nl_ctx->link_info_cb, NL_CB_FINISH, NL_CB_CUSTOM, wifi_hal_nl_finish_handler, &(nl_ctx->linkinfo_cb_err));
+	nl_cb_set(nl_ctx->set_cb, NL_CB_ACK, NL_CB_CUSTOM, wifi_hal_nl_ack_handler, &(nl_ctx->set_cb_err));
+	nl_cb_set(nl_ctx->set_cb, NL_CB_FINISH, NL_CB_CUSTOM, wifi_hal_nl_finish_handler, &(nl_ctx->set_cb_err));
 
 	return 0;
 
 error:
+	nl_cb_put(nl_ctx->set_cb );
 	nl_cb_put(nl_ctx->if_cb );
 	nl_cb_put(nl_ctx->link_info_cb);
 	return -ENOMEM;
@@ -566,6 +583,173 @@ static int wifi_hal_get_stainfo(struct netlink_ctx *nl_ctx, int index)
 	return 0;
 }
 
+static int wifi_hal_set_distance(struct netlink_ctx *nl_ctx, int index, struct wifi_config *config)
+{
+	struct nl_msg* msg = nlmsg_alloc();
+	int ret = 0;
+	unsigned int coverage;
+
+	if (!msg) {
+		hal_err(HAL_DBG_WIFI, "failed to allocate NL80211 message.\n");
+		return -ENOMEM;
+	}
+
+	/* Create the message, so it will send a command to the nl80211 interface. */
+	genlmsg_put(msg, 0, 0,	nl_ctx->nl80211_id, 0, 0, NL80211_CMD_SET_WIPHY, 0);
+	nl_ctx->set_cb_err = 1;
+	/* Add specific attributes to change the distance of the device. */
+	NLA_PUT_U32(msg, NL80211_ATTR_WIPHY, atoi(nl_ctx->phyname[index]));
+	/*
+	* Divide double the distance by the speed of light
+	* in m/usec (300) to get round-trip time in microseconds
+	* and then divide the result by three to get coverage class
+	* as specified in IEEE 802.11-2007 table 7-27.
+	* Values are rounded upwards.
+	*/
+	coverage = (config->distance + 449) / 450;
+	if (coverage > 255)
+		goto invalid_distance;
+
+	NLA_PUT_U32(msg, NL80211_ATTR_WIPHY_COVERAGE_CLASS, coverage);
+
+	/* Finally send it and receive the amount of bytes sent. */
+	ret = nl_send_auto(nl_ctx->sock, msg);
+
+	if (ret<0)
+		goto nla_put_failure;
+
+	while (nl_ctx->set_cb_err > 0)
+	{
+		nl_recvmsgs(nl_ctx->sock, nl_ctx->set_cb);
+	}
+
+	nlmsg_free(msg);
+	return EXIT_SUCCESS;
+
+invalid_distance:
+nla_put_failure:
+	nlmsg_free(msg);
+	return -EXIT_FAILURE;
+}
+
+static int wifi_hal_set_txpower(struct netlink_ctx *nl_ctx, int index, struct wifi_config *config)
+{
+	struct nl_msg* msg = nlmsg_alloc();
+	int ret = 0;
+
+	if (!msg) {
+		hal_err(HAL_DBG_WIFI, "failed to allocate NL80211 message.\n");
+		return -ENOMEM;
+	}
+
+    /* Create the message, so it will send a command to the nl80211 interface. */
+	genlmsg_put(msg, 0, 0,	nl_ctx->nl80211_id, 0, 0, NL80211_CMD_SET_WIPHY, 0);
+
+	nl_ctx->set_cb_err = 1;
+	/* Add specific attributes to change the txpower of the device. */
+	NLA_PUT_U32(msg, NL80211_ATTR_IFINDEX, if_nametoindex(nl_ctx->ifname[index]));
+	NLA_PUT_U32(msg, NL80211_ATTR_WIPHY_TX_POWER_SETTING, NL80211_TX_POWER_LIMITED);
+	NLA_PUT_U32(msg, NL80211_ATTR_WIPHY_TX_POWER_LEVEL, config->tx_power * 100); // dbm to mdBm
+
+	/* Finally send it and receive the amount of bytes sent. */
+	ret = nl_send_auto(nl_ctx->sock, msg);
+	if (ret<0)
+		goto nla_put_failure;
+
+	while (nl_ctx->set_cb_err > 0)
+	{
+		nl_recvmsgs(nl_ctx->sock, nl_ctx->set_cb);
+	}
+
+	nlmsg_free(msg);
+	return EXIT_SUCCESS;
+
+nla_put_failure:
+	nlmsg_free(msg);
+	return -EXIT_FAILURE;
+}
+
+static int wifi_hal_set_country(struct netlink_ctx *nl_ctx, int index, struct wifi_config *config)
+{
+	struct nl_msg* msg = nlmsg_alloc();
+	int ret = 0;
+
+	if (!msg) {
+		hal_err(HAL_DBG_WIFI, "failed to allocate NL80211 message.\n");
+		return -ENOMEM;
+	}
+
+	/* Create the message, so it will send a command to the nl80211 interface. */
+	genlmsg_put(msg, 0, 0,	nl_ctx->nl80211_id, 0, 0, NL80211_CMD_REQ_SET_REG, 0);
+
+	nl_ctx->set_cb_err = 1;
+	/* Add specific attributes to change the country of the device. */
+	NLA_PUT_STRING(msg, NL80211_ATTR_REG_ALPHA2, config->country);
+
+	/* Finally send it and receive the amount of bytes sent. */
+	ret = nl_send_auto(nl_ctx->sock, msg);
+	if (ret<0)
+		goto nla_put_failure;
+
+	while (nl_ctx->set_cb_err > 0)
+	{
+		nl_recvmsgs(nl_ctx->sock, nl_ctx->set_cb);
+	}
+
+	nlmsg_free(msg);
+	return EXIT_SUCCESS;
+
+nla_put_failure:
+	nlmsg_free(msg);
+	return -EXIT_FAILURE;
+}
+
+
+static int wifi_hal_set_mesh_fwding(struct netlink_ctx *nl_ctx, int index, struct wifi_config *config)
+{
+	struct nl_msg* msg = nlmsg_alloc();
+	int ret = 0;
+	struct nlattr *container;
+	uint8_t value = (uint8_t) 0;
+
+	if (!msg) {
+		hal_err(HAL_DBG_WIFI, "failed to allocate NL80211 message.\n");
+		goto nla_put_failure;
+	}
+
+	genlmsg_put(msg, 0, 0,	nl_ctx->nl80211_id, 0, 0, NL80211_CMD_SET_MESH_PARAMS, 0);
+	NLA_PUT_U32(msg, NL80211_ATTR_IFINDEX, if_nametoindex(nl_ctx->ifname[index]));
+
+	/* Create the message, so it will send a command to the nl80211 interface. */
+	container = nla_nest_start(msg, NL80211_ATTR_MESH_CONFIG);
+	if (!container)
+		goto nla_put_failure;
+	/* Add specific attributes to change the mesh fwding of the device. */
+	value = config->mesh_fwding;
+	printf("value %d %d\n", value, config->mesh_fwding);
+	nla_put(msg, NL80211_MESHCONF_FORWARDING, sizeof(uint8_t), &value);
+	nla_nest_end(msg, container);
+
+	/* Finally send it and receive the amount of bytes sent. */
+	ret = nl_send_auto_complete(nl_ctx->sock, msg);
+	if (ret<0)
+		goto nla_put_failure;
+
+	nl_ctx->set_cb_err = 1;
+	while (nl_ctx->set_cb_err > 0)
+	{
+		nl_recvmsgs(nl_ctx->sock, nl_ctx->set_cb);
+	}
+
+	nlmsg_free(msg);
+	return EXIT_SUCCESS;
+
+nla_put_failure:
+	nlmsg_free(msg);
+	return -EXIT_FAILURE;
+}
+
+
 static int wifi_hal_get_hal_version(char *version)
 {
 	snprintf(version, 32, "%d.%d", WIFI_RADIO_HAL_MAJOR_VERSION, WIFI_RADIO_HAL_MINOR_VERSION);
@@ -581,8 +765,6 @@ int wifi_hal_get_iface_name(struct radio_context *ctx, char *name, int radio_ind
 
 	return 0;
 }
-
-
 
 static int wifi_hal_get_txrate (struct radio_context *ctx, int radio_index)
 {
@@ -706,11 +888,6 @@ static int wifi_hal_start_wpa_dummy_config(struct radio_context *ctx, int radio_
 	safe_free(cmd_buf);
 #endif
 
-	ret = system("pkill wpa_supplicant");
-	if (ret) {
-		hal_warn(HAL_DBG_WIFI, "failed to pkill wpa_supplicant\n");
-	}
-
 	for (int i=0; i < sc->radio_amount; i++) {
 
 		str_len = asprintf(&cmd_buf, (const char*) "rm /var/run/wpa_supplicant/%s 2>/dev/null", sc->nl_ctx.ifname[i]);
@@ -728,7 +905,7 @@ static int wifi_hal_start_wpa_dummy_config(struct radio_context *ctx, int radio_
 						(const char*) "wpa_supplicant -dd -Dnl80211 -B -i%s -c%s -f /tmp/wpa_default.log ",
 						 sc->nl_ctx.ifname[i], WPA_SUPPLICANT_DEFAULT_CONFIG);
 		if (str_len)
-			ret = system(cmd_buf);
+			ret = system(cmd_buf);  // TODO remove system calls
 		else
 			return -1;
 
@@ -898,6 +1075,7 @@ static int wifi_hal_connect_ap(struct radio_context *ctx, int index)
 {
 	struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
 	struct wifi_config *config = (struct wifi_config *)ctx->config[index];
+	struct netlink_ctx *nl_ctx = &sc->nl_ctx;
 	char *cmd_buf = nullptr;
 	char resp_buf[RESP_BUFFER_SIZE] = {0};
 	char nw_id[6] = {0};
@@ -939,6 +1117,23 @@ static int wifi_hal_connect_ap(struct radio_context *ctx, int index)
 	}
 	free(cmd_buf);
 
+	// set bandwidth
+	ret = wifi_debugfs_write(sc, "chanbw", config->bw, index);
+	if (ret)
+		hal_warn(HAL_DBG_WIFI, "failed to set bandwidth, card not supporting?\n");
+
+	ret = wifi_hal_set_txpower(nl_ctx, index, config);
+	if (ret<0)
+		hal_warn(HAL_DBG_WIFI, "failed to set tx_power, card not supporting?\n");
+
+	ret = wifi_hal_set_distance(nl_ctx, index, config);
+	if (ret<0)
+		hal_warn(HAL_DBG_WIFI, "failed to set distance, card not supporting?\n");
+
+	ret = wifi_hal_set_country(nl_ctx, index, config);
+	if (ret<0)
+		hal_warn(HAL_DBG_WIFI, "failed to set country, card not supporting?\n");
+
 	str_len = asprintf(&cmd_buf, (const char*) "%s%s%s\"%s\"", "SET_NETWORK ", nw_id, " ssid ", config->ssid);
 	if (str_len)
 		ret = wifi_hal_send_wpa_command(sc->wpa_ctx, index, cmd_buf, resp_buf, &len);
@@ -977,6 +1172,7 @@ static int wifi_hal_create_ap(struct radio_context *ctx, int index)
 {
 	struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
 	struct wifi_config *config = (struct wifi_config *)ctx->config[index];
+	struct netlink_ctx *nl_ctx = &sc->nl_ctx;
 	char *cmd_buf = nullptr;
 	char resp_buf[RESP_BUFFER_SIZE] = {0};
 	char nw_id[6] = {0};
@@ -1026,10 +1222,27 @@ static int wifi_hal_create_ap(struct radio_context *ctx, int index)
 		return -1;
 
 	if (ret || strncmp(resp_buf, "OK", 2) != 0) {
-		hal_err(HAL_DBG_WIFI, "failed to set mesh mode\n");
+		hal_err(HAL_DBG_WIFI, "failed to set ap mode\n");
 		return -1;
 	}
 	free(cmd_buf);
+
+	// set bandwidth
+	ret = wifi_debugfs_write(sc, "chanbw", config->bw, index);
+	if (ret)
+		hal_warn(HAL_DBG_WIFI, "failed to set bandwidth, card not supporting?\n");
+
+	ret = wifi_hal_set_txpower(nl_ctx, index, config);
+	if (ret<0)
+		hal_warn(HAL_DBG_WIFI, "failed to set tx_power, card not supporting?\n");
+
+	ret = wifi_hal_set_distance(nl_ctx, index, config);
+	if (ret<0)
+		hal_warn(HAL_DBG_WIFI, "failed to set distance, card not supporting?\n");
+
+	ret = wifi_hal_set_country(nl_ctx, index, config);
+	if (ret<0)
+		hal_warn(HAL_DBG_WIFI, "failed to set country, card not supporting?\n");
 
 	str_len = asprintf(&cmd_buf, (const char*) "SET_NETWORK %s ssid \"%s\"", nw_id, config->ssid);
 	if (str_len)
@@ -1051,19 +1264,6 @@ static int wifi_hal_create_ap(struct radio_context *ctx, int index)
 
 	if (ret || strncmp(resp_buf, "OK", 2) != 0) {
 		hal_err(HAL_DBG_WIFI, "failed to set mesh freq\n");
-		return -1;
-	}
-	free(cmd_buf);
-
-	// todo not possible with wpa_cli?
-	str_len = asprintf(&cmd_buf, (const char*) "iw reg set %s", config->country);
-	if (str_len)
-		ret = system(cmd_buf);
-	else
-		return -1;
-
-	if (ret) {
-		hal_err(HAL_DBG_WIFI, "failed to set mesh country\n");
 		return -1;
 	}
 	free(cmd_buf);
@@ -1112,6 +1312,7 @@ static int wifi_hal_create_ap(struct radio_context *ctx, int index)
 static int wifi_hal_join_mesh(struct radio_context *ctx, int index)
 {
 	struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
+	struct netlink_ctx *nl_ctx = &sc->nl_ctx;
 	struct wifi_config *config = (struct wifi_config *)ctx->config[index];
 	char *cmd_buf = nullptr;
 	char resp_buf[RESP_BUFFER_SIZE] = {0};
@@ -1175,18 +1376,22 @@ static int wifi_hal_join_mesh(struct radio_context *ctx, int index)
 	}
 	free(cmd_buf);
 
-	// todo not possible with wpa_cli?
-	str_len = asprintf(&cmd_buf, (const char*) "iw reg set %s", config->country);
-	if (str_len)
-		ret = system(cmd_buf);
-	else
-		return -1;
+	// set bandwidth
+	ret = wifi_debugfs_write(sc, "chanbw", config->bw, index);
+	if (ret)
+		hal_warn(HAL_DBG_WIFI, "failed to set bandwidth, card not supporting?\n");
 
-	if (ret) {
-		hal_err(HAL_DBG_WIFI, "failed to set mesh country\n");
-		return -1;
-	}
-	free(cmd_buf);
+	ret = wifi_hal_set_txpower(nl_ctx, index, config);
+	if (ret<0)
+		hal_warn(HAL_DBG_WIFI, "failed to set tx_power, card not supporting?\n");
+
+	ret = wifi_hal_set_distance(nl_ctx, index, config);
+	if (ret<0)
+		hal_warn(HAL_DBG_WIFI, "failed to set distance, card not supporting?\n");
+
+	ret = wifi_hal_set_country(nl_ctx, index, config);
+	if (ret<0)
+		hal_warn(HAL_DBG_WIFI, "failed to set country, card not supporting?\n");
 
 	str_len = asprintf(&cmd_buf, (const char*) "SET_NETWORK %s ssid \"%s\"", nw_id, config->ssid);
 	if (str_len)
@@ -1212,7 +1417,7 @@ static int wifi_hal_join_mesh(struct radio_context *ctx, int index)
 	}
 	free(cmd_buf);
 
-	str_len = asprintf(&cmd_buf, (const char*) "SET_NETWORK %s key_mgmt SAE", nw_id);
+	str_len = asprintf(&cmd_buf, (const char*) "SET_NETWORK %s key_mgmt %s", nw_id, config->enc);
 	if (str_len)
 		ret = wifi_hal_send_wpa_mesh_command(sc->wpa_ctx, index, cmd_buf, resp_buf, &len);
 	else
@@ -1276,7 +1481,7 @@ int wifi_hal_capture_spectral_scan(struct radio_context *ctx, int index)
 	return 0;
 }
 
-static int wifi_hal_ctrl_recv(struct wifi_softc *sc, int index, char *reply, size_t *reply_len)
+static int wifi_hal_ctrl_recv(struct wifi_softc *sc, int *index, char *reply, size_t *reply_len)
 {
 	struct wpa_ctrl_ctx *ctx = (wpa_ctrl_ctx *)sc->wpa_ctx;
 	int res, i;
@@ -1312,6 +1517,7 @@ static int wifi_hal_ctrl_recv(struct wifi_softc *sc, int index, char *reply, siz
 		if (wpa_ctrl_pending(ctx[i].monitor)>0) {
 			hal_info(HAL_DBG_WIFI, "--- wpa_socket receive %d - %s ---\n", i, sc->nl_ctx.ifname[i]);
 			res = wpa_ctrl_recv(ctx[i].monitor, reply, reply_len);
+			*index = i;
 			return res;
 		}
 	}
@@ -1320,7 +1526,7 @@ static int wifi_hal_ctrl_recv(struct wifi_softc *sc, int index, char *reply, siz
 	return -1;
 }
 
-static int wifi_hal_wait_on_event(struct wifi_softc *sc, int index, char *buf, size_t buflen)
+static int wifi_hal_wait_on_event(struct wifi_softc *sc, int *index, char *buf, size_t buflen)
 {
 	struct wpa_ctrl_ctx *ctx = (wpa_ctrl_ctx *)sc->wpa_ctx;
 	size_t nread = buflen - 1;
@@ -1335,7 +1541,6 @@ static int wifi_hal_wait_on_event(struct wifi_softc *sc, int index, char *buf, s
 		}
 	}
 
-	/* To DO: Pass valid index during concurency */
 	result = wifi_hal_ctrl_recv(sc, index, buf, &nread);
 	if (result < 0) {
 		hal_err(HAL_DBG_WIFI, "wifi_ctrl_recv failed: %s\n", strerror(errno));
@@ -1376,9 +1581,9 @@ static wifi_SystemEvent wifi_hal_map_wpa_event_to_state(char *event, int len) {
         return DISCONNECTED_EVENT;
     } else if (str_starts(event, AP_EVENT_ENABLED)) {
         return AP_ENABLED_EVENT;
-    } else if (str_starts(event, MESH_GROUP_STARTED)) {
-        return MESH_GROUP_STARTED_EVENT;
-    } else if (str_starts(event, MESH_PEER_CONNECTED)) {
+    } else if (str_starts(event, MESH_GROUP_STARTED)) {   // starting mesh group
+        return STARTUP_STAGE_2_EVENT;
+    } else if (str_starts(event, MESH_PEER_CONNECTED)) {  // other node connects to created mesh group
         return CONNECTED_EVENT;
     } else if (str_starts(event, MESH_PEER_DISCONNECTED)) {
         return DISCONNECTED_EVENT;
@@ -1437,6 +1642,7 @@ static wifi_SystemEvent wifi_hal_map_wpa_event_to_state(char *event, int len) {
     } else if (str_starts(event, WPA_EVENT_TERMINATING)) {
         return TERMINATE_EVENT;
     }
+
     return NO_EVENT;
 }
 
@@ -1485,8 +1691,25 @@ static wifi_state init_handler(struct radio_context *ctx, int index) {
 	}
 
 	/* to get all wifi radios initialised */
-	if (index < sc->radio_amount-1)
+	if (index < sc->radio_amount-1 && ((struct wifi_config *)ctx->config[index+1])->mode[0] != '\0' )
 		return INIT_STATE;
+
+	return IF_INIT_STAGE_1;
+}
+
+static wifi_state init_stage_2_handler(struct radio_context *ctx, int index) {
+	struct wifi_config *config;
+	struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
+	struct netlink_ctx *nl_ctx = &sc->nl_ctx;
+	int ret = 0;
+
+	config = (struct wifi_config *)ctx->config[index];
+
+	if (strncmp(config->mode, "mesh", 4) == 0) {
+		ret = wifi_hal_set_mesh_fwding(nl_ctx, index, (struct wifi_config *)ctx->config);
+		if (ret<0)
+			hal_warn(HAL_DBG_WIFI, "failed to set mesh settings, card not supporting?\n");
+	}
 
 	return IF_UP_STATE;
 }
@@ -1495,6 +1718,7 @@ static wifi_state init_handler(struct radio_context *ctx, int index) {
 static wifi_StateMachine wifi_asStateMachine[] =
 {    // from          // event trigger    // event handler
     {INIT_STATE,         STARTUP_EVENT,      init_handler},
+	{IF_INIT_STAGE_1,    STARTUP_STAGE_2_EVENT,init_stage_2_handler},
     {DISCONNECTED_STATE, CONNECTED_EVENT,    disconnected_handler},
     {CONNECTED_STATE,    DISCONNECTED_EVENT, connected_handler},
 	{UNKNOWN_STATE,      NO_EVENT,           nullptr} // Don't remove this line
@@ -1509,16 +1733,17 @@ static void wifi_events(struct radio_context *ctx)
 	bool loop = true;
 	wifi_SystemEvent eNewEvent;
 
-	int index = -1; // TODO used for initialisation loop
+	int index = -1; // this is for initialisation phase.  After INIT, correct index is received from wifi_hal_wait_on_event()
 
-	sc->state = INIT_STATE;
-	eNewEvent = STARTUP_EVENT;
+	sc->state = INIT_STATE;    // first state for startup
+	eNewEvent = STARTUP_EVENT; // init event for startup
 
 	while (loop) {
 		hal_info(HAL_DBG_WIFI, "EventState: %d\n", sc->state);
+
 		if (sc->state != INIT_STATE) {
 			// read next events
-			nread = wifi_hal_wait_on_event(sc, index, resp_buf, len);
+			nread = wifi_hal_wait_on_event(sc, &index, resp_buf, len);
 			eNewEvent = wifi_hal_map_wpa_event_to_state(resp_buf, nread);
 		} else {
 			index++;
@@ -1540,7 +1765,7 @@ static void wifi_events(struct radio_context *ctx)
 				i++;
 			}
 			if (wifi_asStateMachine[i].StateMachineEventHandler != nullptr) {
-				sc->state = (*wifi_asStateMachine[i].StateMachineEventHandler)(ctx, index);
+				sc->state = (*wifi_asStateMachine[i].StateMachineEventHandler)(ctx, index); // index from wifi_hal_wait_on_event()
 			}
 			else
 				hal_warn(HAL_DBG_WIFI, "Not defined state state!!  event=%d\n", eNewEvent);

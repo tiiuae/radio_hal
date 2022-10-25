@@ -9,6 +9,7 @@ enum wifi_state {
 	UNKNOWN_STATE = -1,
 	INIT_STATE,
 	IF_DOWN_STATE,
+	IF_INIT_STAGE_1,
 	IF_UP_STATE,
 	ASSOCIATED_STATE,
 	CONNECTED_STATE,
@@ -20,6 +21,7 @@ enum wifi_state {
 enum wifi_SystemEvent {
 	NO_EVENT = -1,
 	STARTUP_EVENT,
+	STARTUP_STAGE_2_EVENT,
 	AP_ENABLED_EVENT,
 	MESH_GROUP_STARTED_EVENT,
 	DISCONNECTED_EVENT,
@@ -61,8 +63,10 @@ struct netlink_ctx {
 	char debugfs_root[WIFI_RADIO_MAX][RADIO_DEBUGFS_DIRSIZE];
 	struct nl_cb *if_cb;
 	struct nl_cb *link_info_cb;
+	struct nl_cb *set_cb;
 	struct nl_cb *gen_nl_cb;
 	int if_cb_err;
+	int set_cb_err;
 	int csa_cb_err;
 	int linkinfo_cb_err;
 	enum wifi_driver_version drv_version;
@@ -95,6 +99,7 @@ int wifi_hal_dettach(struct radio_context *ctx);
 int wifi_debugfs_init(struct wifi_softc *sc, int index);
 int wifi_debugfs_read(struct wifi_softc *sc, const char *filename, char *buf, int buf_size, int index);
 int wifi_debugfs_write(struct wifi_softc *sc, const char *filename, const char *cmd, int index);
+int wifi_debugfs_search(struct wifi_softc *sc, const char *filename, const char *substring, int index);
 int wifi_get_fw_stats(struct wifi_softc *sc, char *buf, int buf_size, int index);
 int wifi_capture_spectral_scan(struct wifi_softc *sc, int index);
 int wifi_hal_trigger_scan(struct wifi_softc *sc, int index);
