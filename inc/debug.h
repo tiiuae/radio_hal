@@ -2,6 +2,8 @@
 #define RADIO_HAL_DEBUG_H
 
 #include <stdio.h>
+#include <string.h>
+#include <time.h>
 
 /* to enable(1) or disable(0) debug traces. */
 /* sub radio systems can be selected with debug_mask */
@@ -31,55 +33,67 @@ __attribute__((unused))  static const char *hal_debug_to_string(enum HAL_DEBUG h
 	}
 }
 
-#if (defined DEBUG) && DEBUG == 1
-__attribute__((unused))  static unsigned int debug_mask = HAL_DBG_ANY;
-#define __unused __attribute__((unused))
-
+__attribute__((unused))  static unsigned int debug_radio_mask = HAL_DBG_ANY;
 #define ERROR_PREFIX (const char*)"ERROR"
 #define WARN_PREFIX (const char*)"WARN"
 #define DEBUG_PREFIX (const char*)"DBG"
 #define INFO_PREFIX (const char*)"INFO"
 
+inline static char *_timestamp() {
+	time_t mytime = time(NULL);
+	char *time_str = ctime(&mytime);
+	time_str[strcspn(time_str, "\n")] = 0;
+	return time_str;
+}
+
+// for modem/at - codes from RIL reference
+#define __unused __attribute__((unused))
 
 #define hal_print(sub, prefix, fmt, args...) \
-    do {                                     \
-        if (debug_mask & sub) \
-            fprintf(stdout, "%-5s:%-6s: " fmt, prefix, hal_debug_to_string(sub), ##args); \
-    } while (0)
+	do {                                     \
+		if (debug_radio_mask & sub) \
+			fprintf(stdout, "%-25s:%-5s:%-6s: " fmt, _timestamp(), prefix, hal_debug_to_string(sub), ##args); \
+	} while (0)
 
 #define hal_print_critical(sub, prefix, fmt, args...) \
-    do {        \
-            fprintf(stderr, "%-5s:%-6s: %s:%d:%s(): " fmt, prefix, hal_debug_to_string(sub), \
-            __FILE__, __LINE__, __func__, ##args); \
-    } while (0)
+	do {        \
+		fprintf(stderr, "%-25s:%-5s:%-6s: %s:%d:%s(): " fmt, _timestamp(), prefix, hal_debug_to_string(sub), \
+			__FILE__, __LINE__, __func__, ##args); \
+	} while (0)
 
 #define RLOGE(fmt, args...) \
-    do {        \
-            fprintf(stdout, "ERROR:MODEM : AT error:" fmt, ##args); \
-    } while (0)
+	do {        \
+			fprintf(stdout, "%-25s:ERROR:MODEM : AT error:" fmt, _timestamp(), ##args); \
+	} while (0)
+
+#if (defined DEBUG) && DEBUG == 1
+#define hal_print_debug(sub, prefix, fmt, args...) \
+	do {                                     \
+		if (debug_radio_mask & sub) \
+			fprintf(stdout, "%-25s:%-5s:%-6s: " fmt, _timestamp(),prefix, hal_debug_to_string(sub), ##args); \
+	} while (0)
 
 #define RLOGD(fmt, args...) \
-    do {        \
-            fprintf(stdout, "INFO :MODEM : AT debug:" fmt, ##args); \
-    } while (0)
-
+	do {        \
+			fprintf(stdout, "%-25s:INFO :MODEM : AT debug:" fmt,  _timestamp(), ##args); \
+	} while (0)
 #else // #if (defined DEBUG) && DEBUG == 1
 
-#define hal_print(sub, prefix, fmt, args...) \
+#define hal_print_debug(sub, prefix, fmt, args...) \
    do {} while (0)
 
-#define hal_print_critical(sub, prefix, fmt, args...) \
+#define RLOGD(fmt, args...) \
 	do {} while (0)
 
 #endif // #if (defined DEBUG) && DEBUG == 1
 
 #define hal_err(sub, fmt, ...) \
-    hal_print_critical(sub, ERROR_PREFIX, fmt, ##__VA_ARGS__)
+	hal_print_critical(sub, ERROR_PREFIX, fmt, ##__VA_ARGS__)
 #define hal_warn(sub, fmt, ...) \
-    hal_print(sub, WARN_PREFIX, fmt, ##__VA_ARGS__)
+	hal_print(sub, WARN_PREFIX, fmt, ##__VA_ARGS__)
 #define hal_debug(sub, fmt, ...) \
-    hal_print(sub, DEBUG_PREFIX, fmt, ##__VA_ARGS__)
+	hal_print_debug(sub, DEBUG_PREFIX, fmt, ##__VA_ARGS__)
 #define hal_info(sub, fmt, ...) \
-    hal_print(sub, INFO_PREFIX, fmt, ##__VA_ARGS__)
+	hal_print(sub, INFO_PREFIX, fmt, ##__VA_ARGS__)
 
 #endif  //RADIO_HAL_DEBUG_H

@@ -2,6 +2,7 @@
 #include <cstdarg>
 #include <fcntl.h>
 #include <unistd.h>
+#include <sys/ioctl.h>
 #include "radio_hal.h"
 #include "modem_hal.h"
 #include "at/atchannel.h"
@@ -346,7 +347,7 @@ static void modem_hal_serial_detach(struct modem_softc *sc) {
 static int modem_hal_open(struct radio_context *ctx, enum radio_type type) {
 	int err = 0;
 	struct modem_softc *sc = (struct modem_softc *) ctx->radio_private;
-	struct modem_config *config = (struct modem_config *) (ctx->config);
+	struct modem_config *config = (struct modem_config *) ctx->config[0];
 
 	hal_info(HAL_DBG_MODEM, "modem HAL open %s\n", config->at_serial);
 	sc->atif = open(config->at_serial, O_RDWR | O_NOCTTY | O_SYNC);
@@ -355,6 +356,7 @@ static int modem_hal_open(struct radio_context *ctx, enum radio_type type) {
 		return -1;
 	}
 
+	ioctl(sc->atif, TCFLSH, 2);
 	at_open(sc->atif, &at_event_handler);
 
 	err = modem_hal_serial_attach(sc);
@@ -657,7 +659,7 @@ error:
 
 int modem_hal_connect(struct radio_context *ctx) {
 	struct modem_softc *sc = (struct modem_softc *) ctx->radio_private;
-	struct modem_config *config = (struct modem_config *) ctx->config;
+	struct modem_config *config = (struct modem_config *) ctx->config[0];
 	int ret = 0;
 	char cmd_buf[CMD_BUFFER_SIZE] = {0};
 	char resp_buf[RESP_BUFFER_SIZE] = {0};
@@ -761,7 +763,6 @@ int modem_hal_connect(struct radio_context *ctx) {
 
 static int modem_hal_get_rssi(struct radio_context *ctx, int radio_index)
 {
-	//struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
 	ATResponse *atresponse = nullptr;
 	RIL_SignalStrength_v6 *signalStrength = nullptr;
 	int err;
