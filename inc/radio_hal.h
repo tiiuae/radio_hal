@@ -9,6 +9,9 @@
 #define RADIO_MACADDR_SIZE 18
 #define RADIO_MAX_AMOUNT 2           // max amount of wifis supported
 
+// this is used currently others than wi-fi.
+// Wifi radio amount is defined with WIFI_RADIO_MAX in wifi_hal.h
+#define RADIO_ONE_RADIO_SUPPORT 1      // constant 1=one radio
 
 enum radio_state {
 	RADIO_IDLE_STATE,
