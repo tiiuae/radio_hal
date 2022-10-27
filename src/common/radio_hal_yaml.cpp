@@ -1,7 +1,9 @@
 #include <cstring>
 #include <yaml.h>
 #include <cerrno>
+#include <regex.h>
 #include "radio_hal.h"
+#include "wifi_hal.h"
 #include "radio_hal_yaml.h"
 #include "debug.h"
 
@@ -120,6 +122,23 @@ static int radio_hal_yaml_modem_config(struct modem_config **conf, char *key, ch
 	return 0;
 }
 
+static int radio_hal_yaml_input_validation(const char *string)
+{
+	int    status;
+	regex_t    re;
+
+	if (regcomp(&re, (const char *)"[^A-Za-z0-9_@%+=:,./-]", REG_EXTENDED|REG_NOSUB) != 0) {
+		return(-1);
+	}
+	status = regexec(&re, string, (size_t) 0, NULL, 0);
+	regfree(&re);
+	if (status != 0) {
+		return(-1);
+	}
+
+	return 0;
+}
+
 int radio_hal_yaml_config(void *conf_struct, char* config_files, radio_type radio)
 {
 	int ret = 0;
@@ -170,20 +189,30 @@ int radio_hal_yaml_config(void *conf_struct, char* config_files, radio_type radi
 						if (sizeof(temp_key) > strlen((const char *) token.data.scalar.value))
 							strcpy(temp_key, (const char *) token.data.scalar.value);
 					} else {
+
+						if(!radio_hal_yaml_input_validation((const char*)token.data.scalar.value)) {
+							hal_err(HAL_DBG_COMMON, "Non-valid characters detected.\n");
+							return -1;
+						}
+
 						switch (radio) {
 							case RADIO_WIFI:
+								if (index < WIFI_RADIO_MAX)
 								ret = radio_hal_yaml_wifi_config((struct wifi_config **) conf_struct, temp_key,
 																 (char *) token.data.scalar.value, index);
 								break;
 							case RADIO_BT:
+								if (index < RADIO_ONE_RADIO_SUPPORT)
 								ret = radio_hal_yaml_bt_config((struct bt_config **) conf_struct, temp_key,
 															   (char *) token.data.scalar.value, index);
 								break;
 							case RADIO_15_4:
+								if (index < RADIO_ONE_RADIO_SUPPORT)
 								ret = radio_hal_yaml_z_config((struct z_config **) conf_struct, temp_key,
 															  (char *) token.data.scalar.value, index);
 								break;
 							case RADIO_MODEM:
+								if (index < RADIO_ONE_RADIO_SUPPORT)
 								ret = radio_hal_yaml_modem_config((struct modem_config **) conf_struct, temp_key,
 																  (char *) token.data.scalar.value, index);
 								break;

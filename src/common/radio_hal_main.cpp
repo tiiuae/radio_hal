@@ -2,6 +2,7 @@
 #include <cstring>
 #include <cstdlib>
 #include "../../inc/radio_hal.h"
+#include "wifi_hal.h"
 #include "../../inc/debug.h"
 #include "../../inc/radio_hal_yaml.h"
 
@@ -26,13 +27,20 @@ static int test_radio_hal_api(struct radio_context *ctx, char *argv[], enum radi
 	switch(type)
 	{
 		case RADIO_WIFI:
-			ctx->config[0] = malloc(sizeof(wifi_config));
-			w_config = (wifi_config *) ctx->config;
+
+			for (int i = 0; i<WIFI_RADIO_MAX; i++)
+				ctx->config[i] = calloc(1,sizeof(wifi_config));
+
+			w_config = (struct wifi_config *)ctx->config[0];
 
 			if (argv[4] && argv[5] && argv[6]) {
 				strncpy(w_config->ssid, argv[4], member_size(wifi_config, ssid)-1);
 				strncpy(w_config->key, argv[5],member_size(wifi_config, key)-1);
 				strncpy(w_config->freq, argv[6],member_size(wifi_config, freq)-1);
+				w_config->distance = 3000;
+				strncpy(w_config->bw, "20", member_size(wifi_config, bw)-1);
+				strncpy(w_config->country, "FI", member_size(wifi_config, country));
+				strncpy(w_config->enc, "SAE", member_size(wifi_config, enc));
 			}
 
 			radio_ops->open(ctx, RADIO_WIFI);
