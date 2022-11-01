@@ -16,56 +16,67 @@ static inline const char *wifi_get_dbgfs_basedir(enum wifi_driver_version drv_ve
     return base_dir[drv_version];
 }
 
-static void wifi_get_driver_version(struct wifi_softc *sc)
+static int wifi_get_driver_version(struct wifi_softc *sc, int index)
 {
 	struct stat stats;
 	char dir[64] = {0};
+	int ret = 0;
 
-	snprintf(dir, 64, "%s%s%s%s", "/sys/kernel/debug/ieee80211/", "phy", (char*)sc->nl_ctx.phyname, "/ath9k/");
-	stat(dir, &stats);
+	snprintf(dir, 64, "%s%s%s%s", "/sys/kernel/debug/ieee80211/", "phy", (char*)sc->nl_ctx.phyname[index], "/ath9k/");
+	ret = stat(dir, &stats);
 
-	if (S_ISDIR(stats.st_mode)) {
-		sc->nl_ctx.drv_version = WIFI_DRIVER_ATH9K;
-		return;
+	if (!ret) {
+		if (S_ISDIR(stats.st_mode)) {
+			sc->nl_ctx.drv_version[index] = WIFI_DRIVER_ATH9K;
+			return 0;
+		}
 	}
 
 	memset(dir, 0,  64);
-	snprintf(dir, 64, "%s%s%s%s", "/sys/kernel/debug/ieee80211/", "phy", (char*)sc->nl_ctx.phyname, "/ath10k/");
-	stat(dir, &stats);
+	snprintf(dir, 64, "%s%s%s%s", "/sys/kernel/debug/ieee80211/", "phy", (char*)sc->nl_ctx.phyname[index], "/ath10k/");
+	ret = stat(dir, &stats);
 
-	if (S_ISDIR(stats.st_mode)) {
-		sc->nl_ctx.drv_version = WIFI_DRIVER_ATH10K;
-		return;
+	if (!ret) {
+		if (S_ISDIR(stats.st_mode)) {
+			sc->nl_ctx.drv_version[index] = WIFI_DRIVER_ATH10K;
+			return 0;
+		}
 	}
 
 	memset(dir, 0,  64);
-	snprintf(dir, 64, "%s%s%s%s", "/sys/kernel/debug/ieee80211/", "phy", (char*)sc->nl_ctx.phyname, "/ath11k/");
-	stat(dir, &stats);
+	snprintf(dir, 64, "%s%s%s%s", "/sys/kernel/debug/ieee80211/", "phy", (char*)sc->nl_ctx.phyname[index], "/ath11k/");
+	ret = stat(dir, &stats);
 
-	if (S_ISDIR(stats.st_mode)) {
-		sc->nl_ctx.drv_version = WIFI_DRIVER_ATH11K;
-		return;
+	if (!ret) {
+		if (S_ISDIR(stats.st_mode)) {
+			sc->nl_ctx.drv_version[index] = WIFI_DRIVER_ATH11K;
+			return 0;
+		}
 	}
 
 	memset(dir, 0,  64);
 	snprintf(dir, 64, "%s", "sys/kernel/debug/brcmfmac/");
-	stat(dir, &stats);
+	ret = stat(dir, &stats);
 
-	if (S_ISDIR(stats.st_mode)) {
-		sc->nl_ctx.drv_version = WIFI_DRIVER_BRCM_FMAC;
-		return;
-	}
+	if (!ret)
+		if (S_ISDIR(stats.st_mode)) {
+			sc->nl_ctx.drv_version[index] = WIFI_DRIVER_BRCM_FMAC;
+			return 0;
+		}
 
+	return -1;
 }
 
 int wifi_debugfs_init(struct wifi_softc *sc, int index)
 {
 	struct stat st;
+	int ret;
 
-	wifi_get_driver_version(sc);
+	ret = wifi_get_driver_version(sc, index);
+	if (ret<0)
+		goto exit;
 	/*To Do:  Check if debugfs is mounted */
-	snprintf(sc->nl_ctx.debugfs_root[index], RADIO_DEBUGFS_DIRSIZE, "%s%s%s%s%s%s", "/sys/kernel/debug/ieee80211/", "phy", (char*)sc->nl_ctx.phyname[index], "/", wifi_get_dbgfs_basedir(sc->nl_ctx.drv_version), "/");
-
+	snprintf(sc->nl_ctx.debugfs_root[index], RADIO_DEBUGFS_DIRSIZE, "%s%s%s%s%s%s", "/sys/kernel/debug/ieee80211/", "phy", (char*)sc->nl_ctx.phyname[index], "/", wifi_get_dbgfs_basedir(sc->nl_ctx.drv_version[index]), "/");
 	if (stat(sc->nl_ctx.debugfs_root[index], &st))
 		goto exit;
 
@@ -163,7 +174,7 @@ int wifi_capture_spectral_scan(struct wifi_softc *sc, int index)
 	time(&rawtime);
 	timeinfo = localtime(&rawtime);
 	strftime(filename, 64, "/var/log/spectral_data_%s", timeinfo);
-	if (sc->nl_ctx.drv_version == WIFI_DRIVER_ATH9K) {
+	if (sc->nl_ctx.drv_version[index] == WIFI_DRIVER_ATH9K) {
                 ret = wifi_debugfs_write(sc, "spectral_scan_ctl", "chanscan", index);
                 if(ret)
                         goto error;
@@ -174,7 +185,7 @@ int wifi_capture_spectral_scan(struct wifi_softc *sc, int index)
                 if(ret)
                         goto error;
 		ret = asprintf(&cmd, "cat /sys/kernel/debug/ieee80211/phy%s/ath9k/%s%s", (char*)sc->nl_ctx.phyname[index], "spectral_scan0 > ", filename);
-	} else if (sc->nl_ctx.drv_version == WIFI_DRIVER_ATH10K) {
+	} else if (sc->nl_ctx.drv_version[index] == WIFI_DRIVER_ATH10K) {
                 ret = wifi_debugfs_write(sc, "spectral_scan_ctl", "background", index);
                 if(ret)
                         goto error;

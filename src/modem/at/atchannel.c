@@ -340,6 +340,9 @@ static const char *readline()
      */
     if (*s_ATBufferCur == '\0') {
         /* empty buffer */
+        /* memset for valgrind fix */
+        memset(s_ATBufferCur, '\0', MAX_AT_RESPONSE+1);
+        memset(s_ATBuffer, '\0', MAX_AT_RESPONSE+1);
         s_ATBufferCur = s_ATBuffer;
         *s_ATBufferCur = '\0';
         p_read = s_ATBuffer;

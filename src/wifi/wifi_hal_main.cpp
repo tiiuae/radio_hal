@@ -1537,7 +1537,10 @@ static int wifi_hal_wait_on_event(struct wifi_softc *sc, int *index, char *buf, 
 		char *match = strchr(buf, '>');
 		if (match != nullptr) {
 			nread -= (match+1-buf);
-			memmove(buf, match+1, nread+1);
+			char *temp = (char*)strdup(buf);
+			memmove(temp, match+1, nread+1);
+			strncpy(buf, temp, buflen);
+			free(temp);
 		}
 	}
 
@@ -1646,12 +1649,15 @@ static wifi_state init_handler(struct radio_context *ctx, int index) {
 	struct radio_generic_func *radio_ops;
 	struct wifi_config *config;
 	struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
+	int ret;
 
 	config = (struct wifi_config *)ctx->config[index];
 	radio_ops = ctx->cmn.rd_func;
 
-	if(wifi_debugfs_init(sc, index) != 0) {
-		hal_err(HAL_DBG_WIFI, "debugfs initialisation failed!");
+
+	ret = wifi_debugfs_init(sc, index);
+	if (ret < 0) {
+		hal_warn(HAL_DBG_WIFI, "debugfs initialisation failed!, %d", ret);
 	}
 
 	if (strncmp(config->mode, "ap", 2) == 0) {
@@ -1803,12 +1809,12 @@ struct radio_context*  wifi_hal_attach()
 	struct wifi_softc *sc = nullptr;
 	int err = 0;
 
-	ctx = (struct radio_context *)malloc(sizeof(struct radio_context));
+	ctx = (struct radio_context *)calloc(1, sizeof(struct radio_context));
 	if (!ctx) {
 		hal_err(HAL_DBG_WIFI, "failed to allocate radio hal ctx\n");
 		return nullptr;
 	}
-	sc = (struct wifi_softc *)malloc(sizeof(struct wifi_softc));
+	sc = (struct wifi_softc *)calloc(1, sizeof(struct wifi_softc));
 	if (!sc) {
 		hal_err(HAL_DBG_WIFI, "failed to allocate wifi softc ctx\n");
 		err =  -ENOMEM;
@@ -1818,6 +1824,7 @@ struct radio_context*  wifi_hal_attach()
 	for (int i = 0; i < WIFI_RADIO_MAX; i++) {
 		sc->nl_ctx.ifname[i][0] = '\0';
 		sc->nl_ctx.ifindex[i] = -1;
+		sc->nl_ctx.debugfs_root[i][0] = '\0';
 	}
 	sc->radio_amount = 0;
 
