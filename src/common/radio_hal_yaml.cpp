@@ -8,18 +8,17 @@
 #include "debug.h"
 
 #if not defined RADIO_HAL_UNIT_TEST
-static int debug = 1;
 
 #define member_size(type, member) sizeof(((type *)0)->member)
 
 static int radio_hal_yaml_bt_config(struct bt_config **conf_struct, char *key, char *value, int index) {
-	if (debug)
+	if (DEBUG)
 		hal_debug(HAL_DBG_BT, "radio_hal_bt_config: key: %s value: %s\n", key, value);
 	return 0;
 }
 
 static int radio_hal_yaml_z_config(struct z_config **conf_struct, char *key, char *value, int index) {
-	if (debug)
+	if (DEBUG)
 		hal_debug(HAL_DBG_BT, "radio_hal_z_config: key: %s value: %s\n", key, value);
 	return 0;
 }
@@ -31,7 +30,7 @@ static int radio_hal_yaml_wifi_config(struct wifi_config **conf, char *key, char
 	struct wifi_config *conf_struct = conf[index];
 
 	/* TODO concurrency with single radio? */
-	if (debug)
+	if (DEBUG)
 		hal_debug(HAL_DBG_WIFI, "radio_hal_wifi_config: key: %s value: %s\n", key, value);
 
 	if(!strncmp(key, "debug", strlen("debug"))) {
@@ -105,7 +104,7 @@ static int radio_hal_yaml_modem_config(struct modem_config **conf, char *key, ch
 
 	struct modem_config *conf_struct = conf[index];
 
-	if (debug)
+	if (DEBUG)
 		hal_debug(HAL_DBG_MODEM, "radio_hal_modem_config: key: %s value: %s\n", key, value);
 
 	if(!strncmp(key, "apn", strlen("apn"))) {
