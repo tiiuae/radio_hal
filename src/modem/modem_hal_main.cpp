@@ -260,18 +260,18 @@ static int modem_hal_check_modem() {
 	char *model;
 	ATResponse *at_response = nullptr;
 	const int mm_lenght = 10;
-	manufacturer = (char *) malloc(mm_lenght);
+	manufacturer = (char *) calloc(mm_lenght, sizeof(char));
 	model = (char *) malloc(mm_lenght);
 
 	err = at_send_command_singleline("AT+GMI", "", &at_response);
 	if (err != 0)
 		goto error;
-	strncpy(manufacturer, at_response->p_intermediates->line, sizeof(manufacturer)-1);
+	strncpy(manufacturer, at_response->p_intermediates->line, mm_lenght-1);
 
 	err = at_send_command_singleline("AT+GMM", "", &at_response);
 	if (err != 0)
 		goto error;
-	strncpy(model, at_response->p_intermediates->line, sizeof(model)-1);
+	strncpy(model, at_response->p_intermediates->line, mm_lenght-1);
 
 
 	hal_info(HAL_DBG_MODEM, "Manufacturer: %s\n", manufacturer);

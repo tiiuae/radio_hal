@@ -69,7 +69,7 @@ struct netlink_ctx {
 	int set_cb_err;
 	int csa_cb_err;
 	int linkinfo_cb_err;
-	enum wifi_driver_version drv_version;
+	enum wifi_driver_version drv_version[WIFI_RADIO_MAX];
 };
 
 struct wpa_ctrl_ctx {
