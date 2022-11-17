@@ -6,7 +6,7 @@
 #define RADIO_DEBUGFS_DIRSIZE 264
 
 enum wifi_state {
-	UNKNOWN_STATE = -1,
+	UNKNOWN_STATE = -2,
 	INIT_STATE,
 	IF_DOWN_STATE,
 	IF_INIT_STAGE_1,
@@ -14,6 +14,7 @@ enum wifi_state {
 	ASSOCIATED_STATE,
 	CONNECTED_STATE,
 	DISCONNECTED_STATE,
+	SHUTDOWN_STATE,
 	LAST_STATE  /* Don't remove */
 };
 
@@ -90,7 +91,7 @@ struct wifi_softc {
 	int avg_rssi[WIFI_RADIO_MAX];
 	int channel[WIFI_RADIO_MAX];
 	int mcs[WIFI_RADIO_MAX];
-	enum wifi_state state;
+	enum wifi_state state[WIFI_RADIO_MAX];
 	int radio_amount;
 };
 

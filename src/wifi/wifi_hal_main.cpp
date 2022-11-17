@@ -21,6 +21,9 @@
 
 #include "wpa_socket/wpa_ctrl.h"
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wold-style-cast"
+
 #define WIFI_RADIO_HAL_MAJOR_VERSION 1
 #define WIFI_RADIO_HAL_MINOR_VERSION 0
 
@@ -32,7 +35,7 @@
 #define RESP_BUFFER_SIZE sizeof(char) * 2048
 #define SOCKET_PATH_LENGTH sizeof(char) * 64
 
-static const char *client_socket_dir[WIFI_RADIO_MAX] = {0 };
+static const char *client_socket_dir[WIFI_RADIO_MAX] = {nullptr};
 
 static int wifi_hal_nl_finish_handler(struct nl_msg *msg, void *arg)
 {
@@ -115,30 +118,6 @@ int wifi_hal_run_sys_cmd(char *cmd, char *resp_buf, int resp_size)
 	return 0;
 }
 
-static int wifi_hal_get_phyname(struct wifi_softc *sc)
-{
-	char cmd_buf[CMD_BUFFER_SIZE] = {0};
-	char resp_buf[RESP_BUFFER_SIZE] = {0};
-	int ret = 0;
-
-	for (int i = 0; i < WIFI_RADIO_MAX; i++) {
-		snprintf(cmd_buf, CMD_BUFFER_SIZE, "iw dev %s info | grep wiphy | awk '{print $2}'", sc->nl_ctx.ifname[i]);
-		ret = wifi_hal_run_sys_cmd(cmd_buf, resp_buf, RESP_BUFFER_SIZE - 1);
-		if (ret) {
-			hal_err(HAL_DBG_WIFI, "failed to get phyname\n");
-			return -1;
-		}
-		replace_line_change(resp_buf, (size_t)RESP_BUFFER_SIZE-1);
-
-		if (strlen(resp_buf) < sizeof(sc->nl_ctx.phyname[i]) - 1)
-			strncpy(sc->nl_ctx.phyname[i], resp_buf, sizeof(sc->nl_ctx.phyname[i]));
-		sc->radio_amount+=1;
-		hal_info(HAL_DBG_WIFI, "phy%s %s\n", sc->nl_ctx.phyname[i], sc->nl_ctx.ifname[i]);
-	}
-
-	return 0;
-}
-
 int wifi_hal_channel_to_frequency(int chan, enum nl80211_band band)
 {
 	if (chan <= 0)
@@ -199,30 +178,36 @@ static void get_mac_addr(struct wifi_softc *sc, char *mac_addr, int index)
 	wifi_hal_mac_addr_n2a(mac_addr, mac);
 }
 
-static int wifi_hal_ifname_resp_hdlr(struct nl_msg *msg, void *arg)
-{
-	struct wifi_softc *sc = (struct wifi_softc *)arg;
+static int wifi_hal_ifname_resp_hdlr(struct nl_msg *msg, void *arg) {
+	struct wifi_softc *sc = (struct wifi_softc *) arg;
 	struct netlink_ctx *nl_ctx = &sc->nl_ctx;
-	struct genlmsghdr *hdr = (struct genlmsghdr *)nlmsg_data(nlmsg_hdr(msg));
+	struct genlmsghdr *hdr = (struct genlmsghdr *) nlmsg_data(nlmsg_hdr(msg));
 	struct nlattr *tb_msg[NL80211_ATTR_MAX + 1];
 
 	nla_parse(tb_msg,
-			NL80211_ATTR_MAX,
-			genlmsg_attrdata(hdr, 0),
-			genlmsg_attrlen(hdr, 0),
-			nullptr);
+			  NL80211_ATTR_MAX,
+			  genlmsg_attrdata(hdr, 0),
+			  genlmsg_attrlen(hdr, 0),
+			  nullptr);
 
-	for (int i=0; i < WIFI_RADIO_MAX; i++) {
+	for (int i = 0; i < WIFI_RADIO_MAX; i++) {
 
 		for (int x=0; x < WIFI_RADIO_MAX; x++){
-			if (strncmp(nl_ctx->ifname[x], nla_get_string(tb_msg[NL80211_ATTR_IFNAME]), strlen("wlp5s0")) == 0) {
+
+			if (strncmp(nl_ctx->ifname[x], nla_get_string(tb_msg[NL80211_ATTR_IFNAME]), \
+					strlen(nla_get_string(tb_msg[NL80211_ATTR_IFNAME]))) == 0) {
 				goto skip;
 			}
 		}
 
-		if (nl_ctx->ifname[i][0] ==  '\0' && tb_msg[NL80211_ATTR_IFNAME]) {
+		if (nl_ctx->ifname[i][0] == '\0' && tb_msg[NL80211_ATTR_IFNAME]) {
 			snprintf(nl_ctx->ifname[i], RADIO_IFNAME_SIZE, "%s", nla_get_string(tb_msg[NL80211_ATTR_IFNAME]));
 			nl_ctx->ifindex[i] = (int) nla_get_u32(tb_msg[NL80211_ATTR_IFINDEX]);
+		}
+
+		if (nl_ctx->phyname[i][0] == '\0' && tb_msg[NL80211_ATTR_WIPHY]) {
+			snprintf(nl_ctx->phyname[i], RADIO_PHYNAME_SIZE, "%d", nla_get_u32(tb_msg[NL80211_ATTR_WIPHY]));
+			sc->radio_amount += 1;
 		}
 skip:
 		asm("NOP");
@@ -581,6 +566,8 @@ static int wifi_hal_set_distance(struct netlink_ctx *nl_ctx, int index, struct w
 	struct nl_msg* msg = nlmsg_alloc();
 	int ret = 0;
 	unsigned int coverage;
+	char *err;
+	long value;
 
 	if (!msg) {
 		hal_err(HAL_DBG_WIFI, "failed to allocate NL80211 message.\n");
@@ -590,8 +577,22 @@ static int wifi_hal_set_distance(struct netlink_ctx *nl_ctx, int index, struct w
 	/* Create the message, so it will send a command to the nl80211 interface. */
 	genlmsg_put(msg, 0, 0,	nl_ctx->nl80211_id, 0, 0, NL80211_CMD_SET_WIPHY, 0);
 	nl_ctx->set_cb_err = 1;
+
 	/* Add specific attributes to change the distance of the device. */
-	NLA_PUT_U32(msg, NL80211_ATTR_WIPHY, atoi(nl_ctx->phyname[index]));
+	errno = 0;
+	value = strtol(nl_ctx->phyname[index], &err, 10);
+
+	if (errno != 0) {
+		hal_err(HAL_DBG_WIFI, "phyname error");
+		return -1;
+	}
+
+	if (err == nl_ctx->phyname[index]) {
+		hal_err(HAL_DBG_WIFI, "No phyname digits were found\n");
+		return -1;
+	}
+
+	NLA_PUT_U32(msg, NL80211_ATTR_WIPHY, (int)value);
 	/*
 	* Divide double the distance by the speed of light
 	* in m/usec (300) to get round-trip time in microseconds
@@ -897,7 +898,7 @@ static int wifi_hal_start_wpa_dummy_config(struct radio_context *ctx, int radio_
 						(const char*) "wpa_supplicant -dd -Dnl80211 -B -i%s -c%s -f /tmp/wpa_default.log ",
 						 sc->nl_ctx.ifname[i], WPA_SUPPLICANT_DEFAULT_CONFIG);
 		if (str_len)
-			ret = system(cmd_buf);  // TODO remove system calls
+			ret = wifi_hal_run_sys_cmd(cmd_buf, resp_buf, len);
 		else
 			return -1;
 
@@ -913,7 +914,9 @@ static int wifi_hal_start_wpa_dummy_config(struct radio_context *ctx, int radio_
 static int wifi_hal_open(struct radio_context *ctx, enum radio_type type)
 {
 	struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
-	int err = 0, ret = 0;
+	int err = 0;
+
+	sc->radio_amount = 0;
 
 	err = wifi_hal_get_interface(&sc->nl_ctx);
 	if (err<0) {
@@ -921,19 +924,12 @@ static int wifi_hal_open(struct radio_context *ctx, enum radio_type type)
 		return -1;
 	}
 
-	ret = wifi_hal_get_phyname(sc);
-	if (ret<0) {
-		hal_err(HAL_DBG_WIFI, "failed to get phy");
-		return -1;
-	}
-
 	for (int i = 0; i < sc->radio_amount; i++) {
-		hal_info(HAL_DBG_WIFI, "wifi(%d) interface: %s , interface index = %d\n", i, sc->nl_ctx.ifname[i], sc->nl_ctx.ifindex[i]);
+		hal_info(HAL_DBG_WIFI, "wifi(%d) interface: %s, phy%s , interface index = %d\n", i, sc->nl_ctx.ifname[i], sc->nl_ctx.phyname[i], sc->nl_ctx.ifindex[i]);
 	}
 
 	err = wifi_hal_start_wpa_dummy_config(ctx, type);
 	if (err) {
-		/* Fix Me: This is false positive error seen due to system cmd */
 		hal_info(HAL_DBG_WIFI, "wifi hal default supplicant start failed\n");
 	}
 
@@ -1556,7 +1552,7 @@ static wifi_SystemEvent wifi_hal_map_wpa_event_to_state(char *event, int len) {
 
     if (str_starts(event, WPA_EVENT_DISCONNECTED)) {
         return DISCONNECTED_EVENT;
-    } else if (str_starts(event, AP_EVENT_ENABLED)) {
+    } else if (str_starts(event, AP_EVENT_ENABLED)) {  // handle AP startup
         return AP_ENABLED_EVENT;
     } else if (str_starts(event, MESH_GROUP_STARTED)) {   // starting mesh group
         return STARTUP_STAGE_2_EVENT;
@@ -1627,7 +1623,7 @@ static wifi_state connected_handler(struct radio_context *ctx, int index) {
     struct radio_generic_func *radio_ops;
     radio_ops = ctx->cmn.rd_func;
 
-    hal_info(HAL_DBG_WIFI, "RSSI:%d dbm\n", (int8_t)radio_ops->radio_get_rssi(ctx, 1));
+    hal_info(HAL_DBG_WIFI, "RSSI:%d dbm\n", (int8_t)radio_ops->radio_get_rssi(ctx, index));
     return CONNECTED_STATE;
 }
 
@@ -1638,7 +1634,7 @@ static wifi_state disconnected_handler(struct radio_context *ctx, int index) {
 	radio_ops = ctx->cmn.rd_func;
 
 	/* for test purposes */
-	hal_info(HAL_DBG_WIFI, "RSSI:%d dbm\n", (int8_t)radio_ops->radio_get_rssi(ctx, 1));
+	hal_info(HAL_DBG_WIFI, "RSSI:%d dbm\n", (int8_t)radio_ops->radio_get_rssi(ctx, index));
 	radio_ops->radio_get_scan_results(ctx, scan_results, index);
 	hal_info(HAL_DBG_WIFI, "SCAN RESULTS %s\n", scan_results);
 
@@ -1649,15 +1645,12 @@ static wifi_state init_handler(struct radio_context *ctx, int index) {
 	struct radio_generic_func *radio_ops;
 	struct wifi_config *config;
 	struct wifi_softc *sc = (struct wifi_softc *)ctx->radio_private;
-	int ret;
 
 	config = (struct wifi_config *)ctx->config[index];
 	radio_ops = ctx->cmn.rd_func;
 
-
-	ret = wifi_debugfs_init(sc, index);
-	if (ret < 0) {
-		hal_warn(HAL_DBG_WIFI, "debugfs initialisation failed!, %d", ret);
+	if(wifi_debugfs_init(sc, index) != 0) {
+		hal_err(HAL_DBG_WIFI, "debugfs initialisation failed!\n");
 	}
 
 	if (strncmp(config->mode, "ap", 2) == 0) {
@@ -1670,10 +1663,6 @@ static wifi_state init_handler(struct radio_context *ctx, int index) {
 		return UNKNOWN_STATE;
 	}
 
-	/* to get all wifi radios initialised */
-	if (index < sc->radio_amount-1 && ((struct wifi_config *)ctx->config[index+1])->mode[0] != '\0' )
-		return INIT_STATE;
-
 	return IF_INIT_STAGE_1;
 }
 
@@ -1684,7 +1673,6 @@ static wifi_state init_stage_2_handler(struct radio_context *ctx, int index) {
 	int ret = 0;
 
 	config = (struct wifi_config *)ctx->config[index];
-
 	if (strncmp(config->mode, "mesh", 4) == 0) {
 		ret = wifi_hal_set_mesh_fwding(nl_ctx, index, (struct wifi_config *)ctx->config);
 		if (ret<0)
@@ -1694,11 +1682,16 @@ static wifi_state init_stage_2_handler(struct radio_context *ctx, int index) {
 	return IF_UP_STATE;
 }
 
+static wifi_state terminate_handler(struct radio_context *ctx, int index) {
+	return SHUTDOWN_STATE;
+}
+
 //wifi state machine definition TODO
 static wifi_StateMachine wifi_asStateMachine[] =
 {    // from          // event trigger    // event handler
     {INIT_STATE,         STARTUP_EVENT,      init_handler},
 	{IF_INIT_STAGE_1,    STARTUP_STAGE_2_EVENT,init_stage_2_handler},
+	{IF_UP_STATE,        TERMINATE_EVENT,    terminate_handler},
     {DISCONNECTED_STATE, CONNECTED_EVENT,    disconnected_handler},
     {CONNECTED_STATE,    DISCONNECTED_EVENT, connected_handler},
 	{UNKNOWN_STATE,      NO_EVENT,           nullptr} // Don't remove this line
@@ -1711,46 +1704,60 @@ static void wifi_events(struct radio_context *ctx)
 	size_t len = sizeof(resp_buf) - 1;
 	size_t nread = 0;
 	bool loop = true;
-	wifi_SystemEvent eNewEvent;
+	wifi_SystemEvent eNewEvent[WIFI_RADIO_MAX];
+	wifi_state state_machine = INIT_STATE;
+	int index = -1; // After INIT, correct index is received from wifi_hal_wait_on_event()
 
-	int index = -1; // this is for initialisation phase.  After INIT, correct index is received from wifi_hal_wait_on_event()
+	hal_info(HAL_DBG_WIFI, "Initialize StateMachine\n");
 
-	sc->state = INIT_STATE;    // first state for startup
-	eNewEvent = STARTUP_EVENT; // init event for startup
+	// prepare for state machine and set init_state/startup for radios
+	for (int i=0; i<sc->radio_amount; i++) {
+		sc->state[i] = INIT_STATE;    // first state for startup
+		eNewEvent[i] = STARTUP_EVENT; // init event for startup
+	}
 
 	while (loop) {
-		hal_info(HAL_DBG_WIFI, "EventState: %d\n", sc->state);
-
-		if (sc->state != INIT_STATE) {
+		if (state_machine != INIT_STATE) {
 			// read next events
+			hal_info(HAL_DBG_WIFI, "RadioIndex=%d, EventState=%d\n", index, sc->state[index]);
 			nread = wifi_hal_wait_on_event(sc, &index, resp_buf, len);
-			eNewEvent = wifi_hal_map_wpa_event_to_state(resp_buf, nread);
+			eNewEvent[index] = wifi_hal_map_wpa_event_to_state(resp_buf, nread);
 		} else {
-			index++;
-			eNewEvent = STARTUP_EVENT;
+			if (sc->state[index+1] == INIT_STATE) {
+				index++;
+			} else {
+				state_machine = IF_UP_STATE;
+				continue;
+			}
+			hal_debug(HAL_DBG_WIFI, "index++ .... RadioIndex=%d, EventState=%d\n", index, sc->state[index]);
 		}
 
-        if (eNewEvent == NO_EVENT) {
+        if (eNewEvent[index] == NO_EVENT) {
             continue;
         }
 
-        if ((sc->state < LAST_STATE) && (eNewEvent < LAST_EVENT)) {
+		for (int i=0; i<sc->radio_amount; i++) {
+			if(sc->state[i] == SHUTDOWN_STATE)
+				return;
+		}
+
+        if ((sc->state[index] < LAST_STATE) && (eNewEvent[index] < LAST_EVENT)) {
 			int i = 0;
 			// search from StateMachine
 			while (wifi_asStateMachine[i].StateMachineEventHandler != nullptr) {
-				if ((wifi_asStateMachine[i].StateMachineEvent == eNewEvent) &&   // is supported event in StateMachine
-					(wifi_asStateMachine[i].StateMachine == sc->state)) {       // state transition is defined
+				if ((wifi_asStateMachine[i].StateMachineEvent == eNewEvent[index]) &&   // is supported event in StateMachine
+					(wifi_asStateMachine[i].StateMachine == sc->state[index])) {        // state transition is defined
 					break;
 				}
 				i++;
 			}
 			if (wifi_asStateMachine[i].StateMachineEventHandler != nullptr) {
-				sc->state = (*wifi_asStateMachine[i].StateMachineEventHandler)(ctx, index); // index from wifi_hal_wait_on_event()
+				sc->state[index] = (*wifi_asStateMachine[i].StateMachineEventHandler)(ctx, index); // index from wifi_hal_wait_on_event()
 			}
 			else
-				hal_warn(HAL_DBG_WIFI, "Not defined state state!!  event=%d\n", eNewEvent);
+				hal_warn(HAL_DBG_WIFI, "Not defined state state!!  event=%d\n", eNewEvent[index]);
 		} else {
-            hal_warn(HAL_DBG_WIFI, "Wifi state machine unknown event!!  event=%d\n", eNewEvent);
+            hal_warn(HAL_DBG_WIFI, "Wifi state machine unknown event!!  event=%d\n", eNewEvent[index]);
 		}
     }
 }
@@ -1766,6 +1773,23 @@ static int wifi_hal_get_rssi (struct radio_context *ctx, int radio_index)
 	return sc->signal[radio_index];
 }
 
+static int wifi_hal_get_no_of_radio(struct radio_context *ctx, unsigned long *no, enum radio_type type)
+{
+	struct wifi_softc *wsc = (struct wifi_softc *)ctx->radio_private;
+
+	switch(type) {
+		case RADIO_WIFI:
+			*no = wsc->radio_amount;
+			break;
+		case RADIO_MODEM:
+		case RADIO_15_4:
+		case RADIO_BT:
+		default:
+			return -1;
+	}
+	return 0;
+}
+
 static struct radio_generic_func wifi_hal_ops = {
 	.open = wifi_hal_open,
 	.close = wifi_hal_close,
@@ -1776,7 +1800,7 @@ static struct radio_generic_func wifi_hal_ops = {
 	.radio_event_loop = wifi_events,
 	.radio_create_config = nullptr,
 	.radio_enable = nullptr,
-	.get_no_of_radio = nullptr,
+	.get_no_of_radio = wifi_hal_get_no_of_radio,
 	.radio_get_iface_name = wifi_hal_get_iface_name,
 	.radio_get_supported_freq_band = nullptr,
 	.radio_get_status = nullptr,
@@ -1826,7 +1850,6 @@ struct radio_context*  wifi_hal_attach()
 		sc->nl_ctx.ifindex[i] = -1;
 		sc->nl_ctx.debugfs_root[i][0] = '\0';
 	}
-	sc->radio_amount = 0;
 
 	ctx->radio_private = (void*)sc;
 	err = wifi_hal_nl80211_attach(sc);

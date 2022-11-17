@@ -79,7 +79,7 @@ typedef struct radio_generic_func {
 	void (*radio_event_loop)(struct radio_context *ctx);
 	int (*radio_create_config)(void);
 	int (*radio_enable) (struct radio_context *ctx, int radio_index, unsigned char  enable);
-	int (*get_no_of_radio)(unsigned long *no, enum radio_type type);
+	int (*get_no_of_radio)(struct radio_context *ctx, unsigned long *no, enum radio_type type);
 	int (* radio_get_iface_name) (struct radio_context *ctx, char *name, int radio_index);
 	enum radio_freq_band (*radio_get_supported_freq_band) (struct radio_context *ctx, int radio_index);
 	int (*radio_get_status) (struct radio_context *ctx, int radio_index);
